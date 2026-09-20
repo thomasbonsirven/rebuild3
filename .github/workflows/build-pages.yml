@@ -30,11 +30,11 @@ jobs:
           cache: "pip"
 
       - name: Install dependencies
-        shell: pwsh
+        shell: powershell
         run: python -m pip install -r requirements.txt
 
       - name: Prepare persistent local cache
-        shell: pwsh
+        shell: powershell
         run: |
           New-Item -ItemType Directory -Force 'D:\000-Rebuild3\cache' | Out-Null
           Write-Host "Persistent cache: $env:REBUILD3_CACHE"
@@ -46,7 +46,7 @@ jobs:
           }
 
       - name: Build French Android pack
-        shell: pwsh
+        shell: powershell
         run: |
           python build_rebuild3_fr.py `
             --chunk-kb 180 `
@@ -54,18 +54,18 @@ jobs:
             --request-interval 1.0
 
       - name: Validate generated keys
-        shell: pwsh
+        shell: powershell
         run: python validate_pack.py
 
       - name: Add gameplay mods to published site
-        shell: pwsh
+        shell: powershell
         run: |
           New-Item -ItemType Directory -Force 'rebuild3_fr_output\site\mods' | Out-Null
           Copy-Item 'mods\config\apocalypse-vivante.txt' 'rebuild3_fr_output\site\mods\apocalypse-vivante.txt' -Force
           Copy-Item 'web\mods\index.html' 'rebuild3_fr_output\site\mods\index.html' -Force
 
       - name: Build downloadable ZIP
-        shell: pwsh
+        shell: powershell
         run: |
           if (Test-Path 'rebuild3-fr-site.zip') {
             Remove-Item 'rebuild3-fr-site.zip' -Force
