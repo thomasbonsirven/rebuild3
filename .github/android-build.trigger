@@ -1,2 +1,2 @@
-trigger: overlay-v0.1.0
-reason: compile first Rebuild 3 Workshop Android overlay/IME prototype
+trigger: overlay-v0.1.0-retry
+reason: retry with manual Android SDK and Gradle toolchain on Windows self-hosted runner
