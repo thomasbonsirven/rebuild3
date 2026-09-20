@@ -1,2 +1,2 @@
-trigger: rebuild full French pack
-reason: regenerate single FR file, home mods and permanent /fr/ page
+trigger: rebuild split4-v1.1
+reason: publish 4-part French pack and corrected gameplay mods
