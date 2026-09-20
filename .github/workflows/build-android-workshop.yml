@@ -86,6 +86,7 @@ jobs:
           & $gradleExe --version
 
       - name: Build debug APK
+        timeout-minutes: 15
         shell: powershell
         run: |
           $gradleExe = Join-Path $env:RUNNER_TOOL_CACHE "gradle-8.9\gradle-8.9\bin\gradle.bat"
