@@ -5,27 +5,45 @@
 <title>Rebuild 3 — Mods</title>
 <style>
 body{font-family:system-ui;background:#111;color:#eee;max-width:820px;margin:30px auto;padding:0 16px}
-.card{background:#1d1d1d;border:1px solid #333;border-radius:14px;padding:18px}
+.card{background:#1d1d1d;border:1px solid #333;border-radius:14px;padding:18px;margin:14px 0}
 button{padding:12px 18px;border:0;border-radius:9px;font-weight:700}
 small,p{color:#aaa;line-height:1.5}
 code{background:#222;padding:2px 5px;border-radius:5px}
+.badge{display:inline-block;background:#2a2a2a;border:1px solid #444;border-radius:999px;padding:3px 8px;font-size:.8rem;color:#ccc}
 </style>
 </head>
 <body>
 <h1>Rebuild 3 — Mods gameplay</h1>
+
 <div class="card">
-<h2>Apocalypse Vivante</h2>
+<h2>Coup de Pouce <span class="badge">Cheat léger</span></h2>
+<p>Plus confortable sans supprimer le danger : petit bonus de départ, progression un peu plus rapide, fermes et munitions légèrement améliorées. Zombies, hordes, factions et événements restent dangereux.</p>
+<p><b>Conseillé pour garder une partie proche du jeu normal.</b></p>
+<button data-file="coup-de-pouce.txt">Copier le mod</button>
+</div>
+
+<div class="card">
+<h2>Apocalypse Vivante <span class="badge">Overhaul</span></h2>
 <p>Un overhaul de survie dynamique : davantage d'événements, factions plus actives, hordes périodiques, économie mieux équilibrée et fortifications plus utiles.</p>
 <p><b>Réglage conseillé : NORMAL.</b></p>
-<button id="copy">Copier le mod</button>
+<button data-file="apocalypse-vivante.txt">Copier le mod</button>
 </div>
+
 <p><small>Installation Android : <code>Config → Modding → Install Mod → Coller → Okay</code></small></p>
+
 <script>
-document.getElementById('copy').onclick=async function(){
-  const r=await fetch('apocalypse-vivante.txt',{cache:'no-store'});
-  await navigator.clipboard.writeText(await r.text());
-  this.textContent='Copié ✓';
-}
+document.querySelectorAll('button[data-file]').forEach(button=>{
+  button.onclick=async function(){
+    try{
+      const r=await fetch(this.dataset.file,{cache:'no-store'});
+      if(!r.ok)throw new Error('HTTP '+r.status);
+      await navigator.clipboard.writeText(await r.text());
+      this.textContent='Copié ✓';
+    }catch(e){
+      this.textContent='Erreur';
+    }
+  }
+});
 </script>
 </body>
 </html>
