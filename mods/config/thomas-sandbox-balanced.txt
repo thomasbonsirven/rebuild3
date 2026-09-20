@@ -1,0 +1,14 @@
+mod_type = config
+mod_name = Thomas - Sandbox équilibré
+mod_description = Exemple Android : plus de ressources de départ, progression rapide et hordes légèrement réduites.
+
+; Arrays: EASY, NORMAL, CHALLENGING, HARD, IMPOSSIBLE
+STARTING_FOOD = 100, 100, 80, 60, 40
+STARTING_MATERIALS = 40, 40, 30, 25, 20
+STARTING_AMMO = 25, 25, 20, 15, 10
+STARTING_FUEL = 15, 15, 10, 8, 5
+STARTING_MEDICINE = 15, 15, 10, 8, 5
+
+EXPERIENCE_MULTIPLIER = 2.00, 1.50, 1.25, 1.00, 0.75
+MOB_STRENGTH_MULTIPLIER = 0.35, 0.60, 0.90, 1.25, 1.75
+DAYS_BETWEEN_MOB_SPAWN = 45, 35, 28, 22, 18

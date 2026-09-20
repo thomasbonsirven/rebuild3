@@ -1,23 +1,47 @@
-# Rebuild 3 — Traduction française Android
+# Rebuild 3 — FR Android & Modding
 
-Projet pour générer et installer une traduction française de **Rebuild 3: Gangs of Deadsville** sur Android.
+Outils pour **Rebuild 3: Gangs of Deadsville** : traduction française Android,
+mods de configuration et modèles de remplacement de textes de quêtes/événements.
 
-## Fonctionnement
+## Test Android immédiat
 
-Le générateur :
-- télécharge les sources officielles 2024 de Rebuild 3 ;
-- traduit les fichiers `en_*.properties` vers le français via `deep-translator` ;
-- protège les variables dynamiques du jeu (`[Name]`, `{1}`, `[g|...|...]`, etc.) ;
-- découpe le résultat en petits fichiers adaptés au presse-papiers Android ;
-- génère une page HTML avec un bouton **Copier** pour chaque morceau.
+Le site de test est publié automatiquement sur GitHub Pages :
 
-## Test Android
+https://thomasbonsirven.github.io/rebuild3/
 
-Le dossier `test-fr/` contient deux petits mods déjà traduits pour valider la méthode.
+Sur Android, ouvre cette page dans Chrome/Firefox, appuie sur **Copier**, puis :
 
-Dans Rebuild 3 :
+`Rebuild 3 → Config → Modding → Install Mod → appui long → Coller → Okay`
 
-`Config → Modding → Install Mod → Coller → Okay`
+> Rebuild 3 mobile n'installe pas un mod depuis une URL : l'URL sert uniquement à
+> ouvrir la page et copier le texte du mod dans le presse-papiers.
+
+## Traduction française complète
+
+Le workflow manuel **Build full French pack** :
+
+1. télécharge les sources officielles 2024 ;
+2. traduit les fichiers `en_*.properties` ;
+3. protège les variables `[Name]`, `{1}`, `[g|...|...]`, etc. ;
+4. valide les clés ;
+5. découpe le pack pour Android ;
+6. publie le résultat sur GitHub Pages.
+
+Pour le lancer :
+
+`Repository → Actions → Build full French pack → Run workflow`
+
+Ce menu est dans l'onglet **Actions du dépôt**, pas dans `Settings → Pages`.
+
+## Modding
+
+- `mods/config/` : variables de gameplay et difficulté.
+- `mods/language/` : traduction / remplacement de textes.
+- `docs/MODDING.md` : capacités et limites techniques.
+
+Le système de mod officiel permet les mods `config` et `language`.
+Il permet de réécrire le texte d'une quête existante, mais pas d'ajouter une nouvelle
+logique de quête sans modifier le code du jeu.
 
 ## Génération locale
 
@@ -27,20 +51,4 @@ python build_rebuild3_fr.py
 python validate_pack.py
 ```
 
-Le site généré se trouve dans :
-
-`rebuild3_fr_output/site/`
-
-## GitHub Actions / GitHub Pages
-
-Le workflow `.github/workflows/build-pages.yml` génère le pack complet et peut le publier sur GitHub Pages.
-
-Avant son premier lancement :
-
-**Settings → Pages → Source → GitHub Actions**
-
-Puis :
-
-**Actions → Build and publish Rebuild 3 FR → Run workflow**
-
-Le ZIP source officiel n'est pas versionné dans le dépôt. Il est téléchargé automatiquement depuis `rebuildgame.com`.
+Sortie : `rebuild3_fr_output/site/`

@@ -1,4 +1,4 @@
-name: Build and publish Rebuild 3 FR
+name: Build full French pack
 
 on:
   workflow_dispatch:
@@ -14,8 +14,12 @@ concurrency:
 
 jobs:
   build:
+    name: Translate, validate and deploy
     runs-on: ubuntu-latest
     timeout-minutes: 330
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
 
     steps:
       - uses: actions/checkout@v4
@@ -56,5 +60,6 @@ jobs:
         with:
           path: rebuild3_fr_output/site
 
-      - id: deployment
+      - name: Deploy full pack to GitHub Pages
+        id: deployment
         uses: actions/deploy-pages@v4
