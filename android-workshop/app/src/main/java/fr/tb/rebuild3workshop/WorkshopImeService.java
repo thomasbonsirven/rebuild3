@@ -169,10 +169,12 @@ public class WorkshopImeService extends InputMethodService {
 
         if (autoRunning) {
             updateStatus("Écriture automatique...");
+            broadcastProgress("Écriture automatique...");
             handler.post(autoWriter);
         } else {
             handler.removeCallbacks(autoWriter);
             updateStatus("Pause");
+            broadcastProgress("Pause");
         }
     }
 
@@ -227,6 +229,11 @@ public class WorkshopImeService extends InputMethodService {
 
         cursor = end;
         refreshProgress();
+        broadcastProgress(
+            cursor >= payload.length()
+                ? "Partie terminée - valide avec Okay"
+                : "Écriture..."
+        );
 
         if (cursor >= payload.length()) {
             updateStatus("100 % — valide avec Okay");
@@ -294,6 +301,7 @@ public class WorkshopImeService extends InputMethodService {
             refreshProgress();
             updateStatus(
                 payload.length() + " caractères — prêt");
+            broadcastProgress("Prêt");
         } catch (Exception e) {
             payload = "";
             cursor = 0;
@@ -344,6 +352,7 @@ public class WorkshopImeService extends InputMethodService {
     @Override
     public void onFinishInput() {
         stopAuto();
+        broadcastProgress("Champ quitté - pause");
         super.onFinishInput();
     }
 
@@ -352,6 +361,23 @@ public class WorkshopImeService extends InputMethodService {
         stopAuto();
         handler.removeCallbacksAndMessages(null);
         super.onDestroy();
+    }
+
+    private void broadcastProgress(String message) {
+        JSONArray parts = AppState.getParts(this);
+        int totalParts = Math.max(1, parts.length());
+        int currentPart = parts.length() == 0
+            ? 1
+            : AppState.getCurrentPartIndex(this) + 1;
+
+        AppState.sendProgress(
+            this,
+            cursor,
+            Math.max(1, payload.length()),
+            currentPart,
+            totalParts,
+            message
+        );
     }
 
     private int dp(int value) {
