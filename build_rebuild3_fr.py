@@ -762,16 +762,31 @@ def write_chunks(category: str, lines: list[str], out_dir: Path, max_bytes: int)
 
     return written
 
-def build_index(files: list[Path], site_dir: Path):
-    rows = []
+def write_full_pack(sections: list[tuple[str, list[str]]], site_dir: Path) -> Path:
+    """Écrit toute la traduction dans un seul mod language installable."""
+    path = site_dir / "fr_rebuild3_complet.properties"
+    body = [
+        "mod_type = language",
+        "mod_name = Rebuild 3 - Français complet",
+        "mod_description = Traduction française complète de Rebuild 3 pour Android",
+        "mod_language_name = Français",
+        "mod_locale_id = FR",
+        "",
+    ]
 
-    for path in sorted(files):
-        size = path.stat().st_size / 1024
-        rows.append(
-            f'<article class="card"><div><strong>{html.escape(path.name)}</strong>'
-            f'<small>{size:.1f} KiB</small></div>'
-            f'<button data-file="{html.escape(path.name)}">Copier</button></article>'
-        )
+    for category, lines in sections:
+        body.append(f"; ============================================================")
+        body.append(f"; {category}")
+        body.append(f"; ============================================================")
+        body.extend(lines)
+        body.append("")
+
+    path.write_text("\n".join(body).rstrip() + "\n", "utf-8")
+    return path
+
+
+def build_index(full_file: Path, site_dir: Path):
+    size = full_file.stat().st_size / 1024
 
     page = """<!doctype html>
 <html lang="fr">
@@ -785,44 +800,119 @@ body{margin:0;background:#111;color:#eee}
 main{width:min(900px,92vw);margin:32px auto 80px}
 .lead{color:#bbb;line-height:1.55}
 .notice{background:#1d1d1d;border:1px solid #333;border-radius:14px;padding:16px;margin:20px 0}
-.grid{display:grid;gap:10px;margin-top:20px}
-.card{display:flex;justify-content:space-between;align-items:center;gap:14px;padding:14px 16px;background:#181818;border:1px solid #303030;border-radius:12px}
-.card strong{display:block;word-break:break-all}
-.card small{display:block;color:#999}
-button{border:0;border-radius:10px;padding:11px 16px;font-weight:700;cursor:pointer}
+.grid{display:grid;gap:12px;margin-top:20px}
+.card{display:flex;justify-content:space-between;align-items:center;gap:18px;padding:16px;background:#181818;border:1px solid #303030;border-radius:12px}
+.card strong{display:block;font-size:1.05rem}
+.card small{display:block;color:#999;margin-top:4px;line-height:1.4}
+.actions{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}
+button,.link{border:0;border-radius:10px;padding:11px 16px;font-weight:700;cursor:pointer;text-decoration:none;background:#eee;color:#111;font-size:.9rem}
+.link.secondary{background:#2a2a2a;color:#eee;border:1px solid #444}
+.badge{display:inline-block;font-size:.72rem;padding:2px 7px;border:1px solid #444;border-radius:999px;color:#aaa;margin-left:6px}
 #status{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);background:#000;border:1px solid #444;border-radius:999px;padding:10px 16px;opacity:0;transition:.2s;pointer-events:none}
 #status.show{opacity:1}
 code{background:#222;padding:.12rem .35rem;border-radius:5px}
+h2{margin-top:32px}
+@media(max-width:650px){.card{align-items:flex-start;flex-direction:column}.actions{justify-content:flex-start}}
 </style>
 </head>
 <body>
 <main>
 <h1>Rebuild 3 — Français Android</h1>
-<p class="lead">Cette page copie chaque morceau du pack dans le presse-papiers Android.</p>
-<section class="notice"><b>Installation :</b> Copier → Rebuild 3 → <code>Config → Modding → Install Mod</code> → Coller → Okay.</section>
-<section class="grid">__ROWS__</section>
+<p class="lead">Traduction française complète et mods gameplay pour Rebuild 3.</p>
+
+<section class="notice">
+<b>Installation Android :</b>
+Copier → Rebuild 3 → <code>Config → Modding → Install Mod</code> → Coller → Okay.
+</section>
+
+<h2>Traduction française</h2>
+<section class="grid">
+<article class="card">
+  <div>
+    <strong>Français complet <span class="badge">1 seul fichier</span></strong>
+    <small>__SIZE__ KiB — toutes les traductions réunies dans un seul mod.</small>
+  </div>
+  <div class="actions">
+    <button data-file="fr_rebuild3_complet.properties">Copier la traduction</button>
+    <a class="link secondary" href="./fr_rebuild3_complet.properties">Lien permanent</a>
+  </div>
+</article>
+</section>
+
+<h2>Mods gameplay</h2>
+<section class="grid">
+<article class="card">
+  <div>
+    <strong>Coup de Pouce <span class="badge">Cheat léger</span></strong>
+    <small>Moins de grind, progression plus agréable, sans supprimer le danger.</small>
+  </div>
+  <div class="actions">
+    <button data-file="mods/coup-de-pouce.txt">Copier le mod</button>
+  </div>
+</article>
+
+<article class="card">
+  <div>
+    <strong>Apocalypse Vivante <span class="badge">Overhaul</span></strong>
+    <small>Monde plus actif, hordes périodiques, factions dynamiques et survie retravaillée.</small>
+  </div>
+  <div class="actions">
+    <button data-file="mods/apocalypse-vivante.txt">Copier le mod</button>
+  </div>
+</article>
+
+<article class="card">
+  <div>
+    <strong>Tous les mods</strong>
+    <small>Page dédiée aux mods gameplay.</small>
+  </div>
+  <div class="actions">
+    <a class="link secondary" href="./mods/">Ouvrir les mods</a>
+  </div>
+</article>
+</section>
 </main>
+
 <div id="status"></div>
 <script>
 const statusBox=document.getElementById('status');
-function status(msg){statusBox.textContent=msg;statusBox.classList.add('show');setTimeout(()=>statusBox.classList.remove('show'),1800)}
-async function copyText(text){
-  if(navigator.clipboard&&window.isSecureContext){await navigator.clipboard.writeText(text);return}
-  const ta=document.createElement('textarea');ta.value=text;ta.style.position='fixed';ta.style.opacity='0';
-  document.body.appendChild(ta);ta.focus();ta.select();document.execCommand('copy');ta.remove()
+function status(msg){
+  statusBox.textContent=msg;
+  statusBox.classList.add('show');
+  setTimeout(()=>statusBox.classList.remove('show'),1800);
 }
-document.querySelectorAll('button[data-file]').forEach(btn=>btn.addEventListener('click',async()=>{
-  try{
-    const r=await fetch('./'+encodeURIComponent(btn.dataset.file),{cache:'no-store'});
-    if(!r.ok)throw new Error('HTTP '+r.status);
-    await copyText(await r.text());
-    btn.textContent='Copié ✓';status(btn.dataset.file+' copié')
-  }catch(e){status('Erreur : '+e.message)}
-}));
+async function copyText(text){
+  if(navigator.clipboard&&window.isSecureContext){
+    await navigator.clipboard.writeText(text);
+    return;
+  }
+  const ta=document.createElement('textarea');
+  ta.value=text;
+  ta.style.position='fixed';
+  ta.style.opacity='0';
+  document.body.appendChild(ta);
+  ta.focus();
+  ta.select();
+  document.execCommand('copy');
+  ta.remove();
+}
+document.querySelectorAll('button[data-file]').forEach(btn=>{
+  btn.addEventListener('click',async()=>{
+    try{
+      const r=await fetch('./'+btn.dataset.file,{cache:'no-store'});
+      if(!r.ok)throw new Error('HTTP '+r.status);
+      await copyText(await r.text());
+      btn.textContent='Copié ✓';
+      status('Copié dans le presse-papiers');
+    }catch(e){
+      status('Erreur : '+e.message);
+    }
+  });
+});
 </script>
 </body>
 </html>
-""".replace("__ROWS__", "".join(rows))
+""".replace("__SIZE__", f"{size:.1f}")
 
     (site_dir / "index.html").write_text(page, "utf-8")
 
@@ -890,26 +980,28 @@ def main():
         f"      Batch Ollama : max {args.batch_size} fragments / "
         f"{args.batch_chars} caractères"
     )
-    all_files = []
+    sections = []
 
     print("[3/5] Traduction EN → FR...")
     for position, src in enumerate(sources, 1):
         category = src.stem[3:] if src.stem.startswith("en_") else src.stem
         print(f"      [{position}/{len(sources)}] {src.name}")
         translated = translate_file(src, translator)
-        all_files.extend(
-            write_chunks(category, translated, site, max(args.chunk_kb, 32) * 1024)
-        )
+        sections.append((category, translated))
         translator.save()
 
-    print("[4/5] Génération du site...")
-    build_index(all_files, site)
+    print("[4/5] Génération du fichier FR complet et du site...")
+    full_file = write_full_pack(sections, site)
+    build_index(full_file, site)
 
     manifest = {
         "source": SOURCE_URL,
         "language": "fr",
         "locale_id": "FR",
-        "files": [{"name": p.name, "bytes": p.stat().st_size} for p in sorted(all_files)],
+        "file": {
+            "name": full_file.name,
+            "bytes": full_file.stat().st_size,
+        },
     }
     (site / "manifest.json").write_text(
         json.dumps(manifest, ensure_ascii=False, indent=2),
@@ -918,7 +1010,8 @@ def main():
 
     print("[5/5] Terminé.")
     print(f"      Site : {site}")
-    print(f"      Morceaux : {len(all_files)}")
+    print(f"      Fichier FR : {full_file}")
+    print(f"      Taille : {full_file.stat().st_size / 1024:.1f} KiB")
 
 if __name__ == "__main__":
     main()
