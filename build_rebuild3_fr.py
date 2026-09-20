@@ -18,7 +18,10 @@ SOURCE_URL = "https://rebuildgame.com/rebuild3_mod_sources_2024.zip"
 DEFAULT_OUT = Path("rebuild3_fr_output")
 BUNDLED_SOURCE = Path(__file__).resolve().parent / "source" / "rebuild3_mod_sources_2024.zip"
 DEFAULT_CHUNK_KB = 180
-DEFAULT_REQUEST_INTERVAL = 1.0  # secondes entre deux appels Google
+DEFAULT_REQUEST_INTERVAL = 1.0
+DEFAULT_PROVIDER = "ollama"
+DEFAULT_OLLAMA_URL = "http://127.0.0.1:11434"
+DEFAULT_OLLAMA_MODEL = "translategemma:4b-it-q4_K_M"
 
 META_KEYS = {
     "mod_type",
@@ -59,22 +62,24 @@ def safe_extract(archive: zipfile.ZipFile, dest: Path) -> None:
     archive.extractall(dest)
 
 class Translator:
-    def __init__(self, cache_path: Path, request_interval: float = DEFAULT_REQUEST_INTERVAL):
-        try:
-            from deep_translator import GoogleTranslator
-        except ImportError:
-            raise SystemExit(
-                "Module manquant : deep-translator\n"
-                "Installe-le avec : python -m pip install -r requirements.txt"
-            )
-
-        self.engine = GoogleTranslator(source="en", target="fr")
+    def __init__(
+        self,
+        cache_path: Path,
+        provider: str = DEFAULT_PROVIDER,
+        request_interval: float = DEFAULT_REQUEST_INTERVAL,
+        ollama_url: str = DEFAULT_OLLAMA_URL,
+        ollama_model: str = DEFAULT_OLLAMA_MODEL,
+    ):
+        self.provider = provider
         self.cache_path = cache_path
         self.cache_path.parent.mkdir(parents=True, exist_ok=True)
         self.cache = {}
         self.counter = 0
         self.request_interval = max(0.25, float(request_interval))
         self.last_request_at = 0.0
+        self.ollama_url = ollama_url.rstrip("/")
+        self.ollama_model = ollama_model
+        self.engine = None
 
         if cache_path.exists():
             try:
@@ -83,10 +88,55 @@ class Translator:
             except Exception:
                 eprint("      Cache illisible : nouveau cache utilisé.")
 
+        if self.provider == "google":
+            try:
+                from deep_translator import GoogleTranslator
+            except ImportError:
+                raise SystemExit(
+                    "Module manquant : deep-translator\n"
+                    "Installe-le avec : python -m pip install -r requirements.txt"
+                )
+            self.engine = GoogleTranslator(source="en", target="fr")
+        elif self.provider == "ollama":
+            self._check_ollama()
+        else:
+            raise SystemExit(f"Provider inconnu : {self.provider}")
+
     def save(self):
         tmp = self.cache_path.with_suffix(".tmp")
         tmp.write_text(json.dumps(self.cache, ensure_ascii=False, indent=2), "utf-8")
         tmp.replace(self.cache_path)
+
+    def _check_ollama(self) -> None:
+        try:
+            req = urllib.request.Request(
+                f"{self.ollama_url}/api/tags",
+                headers={"User-Agent": "Rebuild3-FR-Builder/1.0"},
+            )
+            with urllib.request.urlopen(req, timeout=10) as response:
+                payload = json.loads(response.read().decode("utf-8"))
+        except Exception as exc:
+            raise SystemExit(
+                "Ollama n'est pas joignable sur "
+                f"{self.ollama_url}. Vérifie qu'Ollama est démarré.\n{exc}"
+            )
+
+        names = {
+            item.get("name", "")
+            for item in payload.get("models", [])
+            if isinstance(item, dict)
+        }
+        if self.ollama_model not in names:
+            # Ollama peut parfois renvoyer le modèle avec :latest.
+            base_names = {name.split(":")[0] for name in names}
+            wanted_base = self.ollama_model.split(":")[0]
+            if wanted_base not in base_names:
+                raise SystemExit(
+                    f"Modèle Ollama absent : {self.ollama_model}\n"
+                    f"Installe-le avec : ollama pull {self.ollama_model}"
+                )
+
+        print(f"      Ollama OK : {self.ollama_model}")
 
     def _throttle(self) -> None:
         elapsed = time.monotonic() - self.last_request_at
@@ -94,6 +144,53 @@ class Translator:
         if remaining > 0:
             time.sleep(remaining)
         self.last_request_at = time.monotonic()
+
+    def _translate_google(self, text: str) -> str:
+        self._throttle()
+        return self.engine.translate(text) or text
+
+    def _translate_ollama(self, text: str) -> str:
+        prompt = (
+            "You are a professional English (en) to French (fr) translator. "
+            "Your goal is to accurately convey the meaning and nuances of the "
+            "original English text while adhering to French grammar, vocabulary, "
+            "and cultural sensitivities.\n"
+            "Produce only the French translation, without any additional "
+            "explanations or commentary. Preserve every token matching "
+            "ZXQPH followed by digits and QXZ exactly, character for character. "
+            "Please translate the following English text into French:\n\n"
+            f"{text}"
+        )
+
+        body = json.dumps(
+            {
+                "model": self.ollama_model,
+                "messages": [{"role": "user", "content": prompt}],
+                "stream": False,
+                "keep_alive": "30m",
+                "options": {
+                    "temperature": 0,
+                    "num_ctx": 8192,
+                },
+            }
+        ).encode("utf-8")
+
+        req = urllib.request.Request(
+            f"{self.ollama_url}/api/chat",
+            data=body,
+            headers={
+                "Content-Type": "application/json",
+                "User-Agent": "Rebuild3-FR-Builder/1.0",
+            },
+            method="POST",
+        )
+        with urllib.request.urlopen(req, timeout=600) as response:
+            payload = json.loads(response.read().decode("utf-8"))
+
+        result = payload.get("message", {}).get("content", "").strip()
+        if not result:
+            raise RuntimeError("Ollama a renvoyé une traduction vide.")
+        return result
 
     def translate_plain(self, text: str) -> str:
         if not text or not re.search(r"[A-Za-z]", text):
@@ -114,19 +211,21 @@ class Translator:
                 pieces.append(current)
             result = "".join(self.translate_plain(piece) for piece in pieces)
             self.cache[text] = result
+            self.save()
             return result
 
         last_error = None
-        max_attempts = 10
+        max_attempts = 4 if self.provider == "ollama" else 10
 
         for attempt in range(1, max_attempts + 1):
             try:
-                self._throttle()
-                result = self.engine.translate(text) or text
+                if self.provider == "ollama":
+                    result = self._translate_ollama(text)
+                else:
+                    result = self._translate_google(text)
+
                 self.cache[text] = result
                 self.counter += 1
-
-                # Persistance immédiate : aucune progression perdue après un arrêt.
                 self.save()
 
                 if self.counter % 25 == 0:
@@ -135,26 +234,33 @@ class Translator:
 
             except Exception as exc:
                 last_error = exc
-                message = str(exc).lower()
-                is_rate_limit = (
-                    "too many requests" in message
-                    or "429" in message
-                    or "rate limit" in message
-                )
 
-                if is_rate_limit:
-                    waits = [30, 60, 120, 180, 300, 300, 300, 300, 300, 300]
-                    wait = waits[min(attempt - 1, len(waits) - 1)]
+                if self.provider == "ollama":
+                    wait = [2, 5, 15, 30][min(attempt - 1, 3)]
                     eprint(
-                        f"      Google limite les requêtes ({attempt}/{max_attempts}). "
-                        f"Pause {wait}s ; cache sauvegardé."
-                    )
-                else:
-                    wait = min(5 * attempt, 60)
-                    eprint(
-                        f"      Traduction impossible ({attempt}/{max_attempts}), "
+                        f"      Ollama erreur ({attempt}/{max_attempts}), "
                         f"reprise dans {wait}s : {exc}"
                     )
+                else:
+                    message = str(exc).lower()
+                    is_rate_limit = (
+                        "too many requests" in message
+                        or "429" in message
+                        or "rate limit" in message
+                    )
+                    if is_rate_limit:
+                        waits = [30, 60, 120, 180, 300, 300, 300, 300, 300, 300]
+                        wait = waits[min(attempt - 1, len(waits) - 1)]
+                        eprint(
+                            f"      Google limite les requêtes "
+                            f"({attempt}/{max_attempts}). Pause {wait}s."
+                        )
+                    else:
+                        wait = min(5 * attempt, 60)
+                        eprint(
+                            f"      Traduction impossible "
+                            f"({attempt}/{max_attempts}), reprise dans {wait}s : {exc}"
+                        )
 
                 self.save()
                 time.sleep(wait)
@@ -209,14 +315,26 @@ class Translator:
 
         translated = self.translate_plain(protected)
 
+        # Vérification stricte avant restauration.
+        missing = [
+            key
+            for key in placeholders
+            if key not in translated
+            and key.lower() not in translated
+            and key.upper() not in translated
+        ]
+        if missing:
+            eprint(
+                f"      Placeholder(s) altéré(s) par le modèle : "
+                f"{', '.join(missing[:3])}. Valeur anglaise conservée."
+            )
+            return value
+
         for key, original in placeholders.items():
             translated = translated.replace(key, original)
             translated = translated.replace(key.lower(), original)
             translated = translated.replace(key.upper(), original)
 
-        if "ZXQPH" in translated:
-            eprint("      Placeholder altéré : valeur anglaise conservée.")
-            return value
         return translated
 
 def split_key_value(line: str):
@@ -386,6 +504,9 @@ def main():
     ap.add_argument("--chunk-kb", type=int, default=DEFAULT_CHUNK_KB)
     ap.add_argument("--cache", type=Path, default=None)
     ap.add_argument("--request-interval", type=float, default=DEFAULT_REQUEST_INTERVAL)
+    ap.add_argument("--provider", choices=["ollama", "google"], default=DEFAULT_PROVIDER)
+    ap.add_argument("--ollama-url", default=DEFAULT_OLLAMA_URL)
+    ap.add_argument("--ollama-model", default=DEFAULT_OLLAMA_MODEL)
     args = ap.parse_args()
 
     out = args.out.resolve()
@@ -424,8 +545,14 @@ def main():
 
     print(f"      {len(sources)} fichier(s) source.")
     print(f"      Cache persistant : {cache}")
-    print(f"      Intervalle Google : {args.request_interval:.2f}s/requête")
-    translator = Translator(cache, request_interval=args.request_interval)
+    print(f"      Provider : {args.provider}")
+    translator = Translator(
+        cache,
+        provider=args.provider,
+        request_interval=args.request_interval,
+        ollama_url=args.ollama_url,
+        ollama_model=args.ollama_model,
+    )
     all_files = []
 
     print("[3/5] Traduction EN → FR...")
