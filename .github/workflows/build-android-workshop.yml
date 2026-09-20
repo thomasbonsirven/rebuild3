@@ -101,11 +101,11 @@ jobs:
         shell: powershell
         run: |
           New-Item -ItemType Directory -Force -Path android-workshop-output | Out-Null
-          Copy-Item "android-workshop\app\build\outputs\apk\debug\app-debug.apk" "android-workshop-output\Rebuild3Workshop-overlay-v0.5.0.apk" -Force
+          Copy-Item "android-workshop\app\build\outputs\apk\debug\app-debug.apk" "android-workshop-output\Rebuild3Workshop-keyboard-v0.6.0.apk" -Force
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: Rebuild3Workshop-overlay-v0.5.0
-          path: android-workshop-output/Rebuild3Workshop-overlay-v0.5.0.apk
+          name: Rebuild3Workshop-keyboard-v0.6.0
+          path: android-workshop-output/Rebuild3Workshop-keyboard-v0.6.0.apk
           retention-days: 30

@@ -2,7 +2,7 @@
 
 Application Android compagnon pour installer les mods et traductions Rebuild 3 sans gros collage presse-papiers.
 
-## V0.2 — Keyboard first
+## V0.6 — Keyboard first
 
 La V0.2 privilégie un clavier Android spécialisé plutôt qu'un overlay.
 
