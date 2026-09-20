@@ -22,6 +22,8 @@ DEFAULT_REQUEST_INTERVAL = 1.0
 DEFAULT_PROVIDER = "ollama"
 DEFAULT_OLLAMA_URL = "http://127.0.0.1:11434"
 DEFAULT_OLLAMA_MODEL = "translategemma:4b-it-q4_K_M"
+DEFAULT_BATCH_SIZE = 20
+DEFAULT_BATCH_CHARS = 6000
 
 META_KEYS = {
     "mod_type",
@@ -69,6 +71,8 @@ class Translator:
         request_interval: float = DEFAULT_REQUEST_INTERVAL,
         ollama_url: str = DEFAULT_OLLAMA_URL,
         ollama_model: str = DEFAULT_OLLAMA_MODEL,
+        batch_size: int = DEFAULT_BATCH_SIZE,
+        batch_chars: int = DEFAULT_BATCH_CHARS,
     ):
         self.provider = provider
         self.cache_path = cache_path
@@ -79,6 +83,8 @@ class Translator:
         self.last_request_at = 0.0
         self.ollama_url = ollama_url.rstrip("/")
         self.ollama_model = ollama_model
+        self.batch_size = max(1, int(batch_size))
+        self.batch_chars = max(500, int(batch_chars))
         self.engine = None
 
         if cache_path.exists():
@@ -191,6 +197,271 @@ class Translator:
         if not result:
             raise RuntimeError("Ollama a renvoyé une traduction vide.")
         return result
+
+    def _translate_ollama_batch(self, texts: list[str]) -> list[str]:
+        """Traduit plusieurs fragments en un seul appel Ollama avec JSON Schema."""
+        if not texts:
+            return []
+
+        items = [{"id": i, "text": text} for i, text in enumerate(texts)]
+        schema = {
+            "type": "object",
+            "properties": {
+                "translations": {
+                    "type": "array",
+                    "minItems": len(items),
+                    "maxItems": len(items),
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "id": {"type": "integer"},
+                            "text": {"type": "string"},
+                        },
+                        "required": ["id", "text"],
+                        "additionalProperties": False,
+                    },
+                }
+            },
+            "required": ["translations"],
+            "additionalProperties": False,
+        }
+
+        prompt = (
+            "Translate every item from English to natural French. "
+            "This is text from the zombie survival game Rebuild 3. "
+            "Keep the tone appropriate to a strategy/survival game. "
+            "Do not merge, omit, reorder or explain items. "
+            "Keep each id unchanged. Return JSON matching the provided schema.\n\n"
+            "INPUT:\n"
+            + json.dumps({"items": items}, ensure_ascii=False)
+        )
+
+        body = json.dumps(
+            {
+                "model": self.ollama_model,
+                "messages": [{"role": "user", "content": prompt}],
+                "stream": False,
+                "keep_alive": "30m",
+                "format": schema,
+                "options": {
+                    "temperature": 0,
+                    "num_ctx": 8192,
+                },
+            },
+            ensure_ascii=False,
+        ).encode("utf-8")
+
+        req = urllib.request.Request(
+            f"{self.ollama_url}/api/chat",
+            data=body,
+            headers={
+                "Content-Type": "application/json",
+                "User-Agent": "Rebuild3-FR-Builder/1.0",
+            },
+            method="POST",
+        )
+        with urllib.request.urlopen(req, timeout=900) as response:
+            payload = json.loads(response.read().decode("utf-8"))
+
+        raw = payload.get("message", {}).get("content", "").strip()
+        if not raw:
+            raise RuntimeError("Ollama a renvoyé un batch vide.")
+
+        parsed = json.loads(raw)
+        rows = parsed.get("translations")
+        if not isinstance(rows, list):
+            raise RuntimeError("Réponse batch sans tableau 'translations'.")
+
+        by_id = {}
+        for row in rows:
+            if not isinstance(row, dict):
+                continue
+            idx = row.get("id")
+            text = row.get("text")
+            if isinstance(idx, int) and isinstance(text, str) and text.strip():
+                by_id[idx] = text.strip()
+
+        expected = set(range(len(texts)))
+        if set(by_id) != expected:
+            missing = sorted(expected - set(by_id))
+            extra = sorted(set(by_id) - expected)
+            raise RuntimeError(
+                f"Batch incomplet : manquants={missing[:5]}, extras={extra[:5]}"
+            )
+
+        return [by_id[i] for i in range(len(texts))]
+
+    def _store_batch(self, texts: list[str], translations: list[str]) -> None:
+        if len(texts) != len(translations):
+            raise RuntimeError("Taille batch traduction incohérente.")
+        for source, translated in zip(texts, translations):
+            self.cache[source] = translated
+            self.counter += 1
+        self.save()
+
+    def _translate_batch_with_fallback(self, texts: list[str], depth: int = 0) -> None:
+        """Batch -> demi-lots -> traduction unitaire en dernier recours."""
+        pending = [text for text in texts if text not in self.cache]
+        if not pending:
+            return
+
+        try:
+            translations = self._translate_ollama_batch(pending)
+            self._store_batch(pending, translations)
+            print(
+                f"      Batch Ollama OK : {len(pending)} fragments "
+                f"({len(self.cache)} en cache)"
+            )
+            return
+        except Exception as exc:
+            if len(pending) == 1:
+                eprint(
+                    f"      Batch unitaire échoué, fallback traduction simple : {exc}"
+                )
+                translated = self._translate_ollama(pending[0])
+                self._store_batch(pending, [translated])
+                return
+
+            mid = len(pending) // 2
+            eprint(
+                f"      Batch de {len(pending)} fragments refusé/incomplet ; "
+                f"découpage en {mid}+{len(pending)-mid}. Détail : {exc}"
+            )
+            self._translate_batch_with_fallback(pending[:mid], depth + 1)
+            self._translate_batch_with_fallback(pending[mid:], depth + 1)
+
+    def translate_many(self, texts: list[str]) -> None:
+        """Pré-remplit le cache en lots pour les fragments uniques."""
+        unique = []
+        seen = set()
+
+        for text in texts:
+            if (
+                not text
+                or text in self.cache
+                or text in seen
+                or not re.search(r"[A-Za-z]", text)
+            ):
+                continue
+            # Les très longs textes gardent le chemin unitaire/splitté existant.
+            if len(text) > 3500:
+                continue
+            seen.add(text)
+            unique.append(text)
+
+        if not unique:
+            return
+
+        batches = []
+        current = []
+        current_chars = 0
+
+        for text in unique:
+            size = len(text)
+            if current and (
+                len(current) >= self.batch_size
+                or current_chars + size > self.batch_chars
+            ):
+                batches.append(current)
+                current = []
+                current_chars = 0
+
+            current.append(text)
+            current_chars += size
+
+        if current:
+            batches.append(current)
+
+        print(
+            f"      Pré-traduction batch : {len(unique)} fragments, "
+            f"{len(batches)} lot(s), max {self.batch_size}/lot"
+        )
+
+        for index, batch in enumerate(batches, 1):
+            print(
+                f"      Lot {index}/{len(batches)} : "
+                f"{len(batch)} fragments, {sum(map(len, batch))} caractères"
+            )
+            self._translate_batch_with_fallback(batch)
+
+    def _collect_fragment(self, text: str, output: list[str]) -> None:
+        if not text or not re.search(r"[A-Za-z]", text):
+            return
+        match = re.match(r"^(\s*)(.*?)(\s*)$", text, re.DOTALL)
+        if not match:
+            core = text
+        else:
+            core = match.group(2)
+        if core and re.search(r"[A-Za-z]", core) and core not in self.cache:
+            output.append(core)
+
+    def _collect_square_token(self, token: str, output: list[str]) -> None:
+        inside = token[1:-1]
+        if "|" not in inside:
+            return
+
+        parts = inside.split("|")
+        if parts[0] in {"g", "g2", "p"}:
+            for part in parts[1:]:
+                self._collect_value_fragments(part, output)
+            return
+
+        for pos, part in enumerate(parts):
+            if pos == 0 and part.startswith("*"):
+                part = part[1:]
+            self._collect_value_fragments(part, output)
+
+    def _collect_value_fragments(self, value: str, output: list[str]) -> None:
+        if not value or not re.search(r"[A-Za-z]", value):
+            return
+
+        protected_patterns = [
+            ("square", SQUARE_RE),
+            ("curly", CURLY_RE),
+            ("printf", PRINTF_RE),
+            ("escape", ESCAPE_RE),
+            ("url", URL_RE),
+        ]
+
+        cursor = 0
+        length = len(value)
+
+        while cursor < length:
+            next_kind = None
+            next_match = None
+
+            for kind, pattern in protected_patterns:
+                match = pattern.search(value, cursor)
+                if match is None:
+                    continue
+                if next_match is None or match.start() < next_match.start():
+                    next_kind = kind
+                    next_match = match
+                elif (
+                    next_match is not None
+                    and match.start() == next_match.start()
+                    and match.end() > next_match.end()
+                ):
+                    next_kind = kind
+                    next_match = match
+
+            if next_match is None:
+                self._collect_fragment(value[cursor:], output)
+                break
+
+            if next_match.start() > cursor:
+                self._collect_fragment(value[cursor:next_match.start()], output)
+
+            if next_kind == "square":
+                self._collect_square_token(next_match.group(0), output)
+
+            cursor = next_match.end()
+
+    def prefetch_values(self, values: list[str]) -> None:
+        fragments = []
+        for value in values:
+            self._collect_value_fragments(value, fragments)
+        self.translate_many(fragments)
 
     def translate_plain(self, text: str) -> str:
         if not text or not re.search(r"[A-Za-z]", text):
@@ -382,9 +653,30 @@ def split_key_value(line: str):
     return match.group(1), left, right
 
 def translate_file(src: Path, translator: Translator) -> list[str]:
-    result = []
+    source_lines = src.read_text("utf-8-sig", errors="replace").splitlines()
 
-    for line in src.read_text("utf-8-sig", errors="replace").splitlines():
+    # Première passe : collecte tous les textes du fichier et les traduit en batch.
+    values_to_prefetch = []
+    for line in source_lines:
+        stripped = line.strip()
+        if not stripped or stripped.startswith(("#", ";")):
+            continue
+
+        key, left, right = split_key_value(line)
+        if key is not None:
+            if key in META_KEYS or key.endswith(SKIP_SUFFIXES):
+                continue
+            spacing = re.match(r"(\s*)", right).group(1)
+            values_to_prefetch.append(right[len(spacing):])
+        else:
+            prefix = line[: len(line) - len(line.lstrip())]
+            values_to_prefetch.append(line[len(prefix):])
+
+    translator.prefetch_values(values_to_prefetch)
+
+    # Deuxième passe : reconstruction exacte du fichier depuis le cache.
+    result = []
+    for line in source_lines:
         stripped = line.strip()
 
         if not stripped:
@@ -544,6 +836,8 @@ def main():
     ap.add_argument("--provider", choices=["ollama", "google"], default=DEFAULT_PROVIDER)
     ap.add_argument("--ollama-url", default=DEFAULT_OLLAMA_URL)
     ap.add_argument("--ollama-model", default=DEFAULT_OLLAMA_MODEL)
+    ap.add_argument("--batch-size", type=int, default=DEFAULT_BATCH_SIZE)
+    ap.add_argument("--batch-chars", type=int, default=DEFAULT_BATCH_CHARS)
     args = ap.parse_args()
 
     out = args.out.resolve()
@@ -589,6 +883,12 @@ def main():
         request_interval=args.request_interval,
         ollama_url=args.ollama_url,
         ollama_model=args.ollama_model,
+        batch_size=args.batch_size,
+        batch_chars=args.batch_chars,
+    )
+    print(
+        f"      Batch Ollama : max {args.batch_size} fragments / "
+        f"{args.batch_chars} caractères"
     )
     all_files = []
 
