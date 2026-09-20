@@ -5,6 +5,8 @@ on:
   push:
     branches: ["main"]
     paths:
+      - "android-workshop/**"
+      - ".github/workflows/build-android-workshop.yml"
       - ".github/android-build.trigger"
 
 permissions:
@@ -13,7 +15,7 @@ permissions:
 jobs:
   build:
     runs-on: [self-hosted, Windows, X64, rebuild3]
-    timeout-minutes: 90
+    timeout-minutes: 60
 
     steps:
       - name: Checkout
@@ -25,69 +27,31 @@ jobs:
           distribution: temurin
           java-version: "17"
 
-      - name: Prepare Android SDK
+      - name: Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android platform
         shell: powershell
-        run: |
-          $ErrorActionPreference = "Stop"
-          $SdkRoot = "D:\000-Rebuild3\android-sdk"
-          $SdkManager = Join-Path $SdkRoot "cmdline-tools\latest\bin\sdkmanager.bat"
+        run: sdkmanager "platform-tools" "platforms;android-35" "build-tools;35.0.0"
 
-          if (-not (Test-Path $SdkManager)) {
-            Write-Host "Installing Android command-line tools..."
-            $Zip = Join-Path $env:RUNNER_TEMP "android-commandline-tools.zip"
-            $Extract = Join-Path $env:RUNNER_TEMP "android-commandline-tools"
-            if (Test-Path $Extract) { Remove-Item $Extract -Recurse -Force }
-            New-Item -ItemType Directory -Force -Path $Extract | Out-Null
-
-            Invoke-WebRequest -Uri "https://dl.google.com/android/repository/commandlinetools-win-12266719_latest.zip" -OutFile $Zip
-            Expand-Archive -LiteralPath $Zip -DestinationPath $Extract -Force
-
-            New-Item -ItemType Directory -Force -Path (Join-Path $SdkRoot "cmdline-tools") | Out-Null
-            if (Test-Path (Join-Path $SdkRoot "cmdline-tools\latest")) {
-              Remove-Item (Join-Path $SdkRoot "cmdline-tools\latest") -Recurse -Force
-            }
-            Move-Item (Join-Path $Extract "cmdline-tools") (Join-Path $SdkRoot "cmdline-tools\latest")
-          }
-
-          "ANDROID_HOME=$SdkRoot" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
-          "ANDROID_SDK_ROOT=$SdkRoot" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
-
-          1..30 | ForEach-Object { "y" } | & $SdkManager --sdk_root=$SdkRoot --licenses | Out-Host
-          & $SdkManager --sdk_root=$SdkRoot "platform-tools" "platforms;android-35" "build-tools;35.0.0"
-
-      - name: Prepare Gradle 8.9
-        shell: powershell
-        run: |
-          $ErrorActionPreference = "Stop"
-          $GradleParent = "D:\000-Rebuild3\gradle"
-          $GradleHome = Join-Path $GradleParent "gradle-8.9"
-          $GradleBin = Join-Path $GradleHome "bin\gradle.bat"
-
-          if (-not (Test-Path $GradleBin)) {
-            Write-Host "Installing Gradle 8.9..."
-            New-Item -ItemType Directory -Force -Path $GradleParent | Out-Null
-            $Zip = Join-Path $env:RUNNER_TEMP "gradle-8.9-bin.zip"
-            Invoke-WebRequest -Uri "https://services.gradle.org/distributions/gradle-8.9-bin.zip" -OutFile $Zip
-            Expand-Archive -LiteralPath $Zip -DestinationPath $GradleParent -Force
-          }
-
-          "GRADLE_BIN=$GradleBin" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
-          & $GradleBin --version
+      - name: Gradle 8.9
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.9"
 
       - name: Build debug APK
         shell: powershell
-        run: |
-          & $env:GRADLE_BIN -p android-workshop --no-daemon clean assembleDebug
+        run: gradle -p android-workshop --no-daemon clean assembleDebug
 
       - name: Prepare artifact
         shell: powershell
         run: |
           New-Item -ItemType Directory -Force -Path android-workshop-output | Out-Null
-          Copy-Item "android-workshop\app\build\outputs\apk\debug\app-debug.apk" "android-workshop-output\Rebuild3Workshop-overlay-v0.1.0.apk" -Force
+          Copy-Item "android-workshop\app\build\outputs\apk\debug\app-debug.apk" "android-workshop-output\Rebuild3Workshop-keyboard-v0.2.0.apk" -Force
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: Rebuild3Workshop-overlay-v0.1.0
-          path: android-workshop-output/Rebuild3Workshop-overlay-v0.1.0.apk
+          name: Rebuild3Workshop-keyboard-v0.2.0
+          path: android-workshop-output/Rebuild3Workshop-keyboard-v0.2.0.apk
           retention-days: 30
