@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Rebuild 3 FR — Test Android</title>
+<style>
+body{font-family:system-ui;background:#111;color:#eee;max-width:760px;margin:30px auto;padding:0 16px}
+.card{display:flex;justify-content:space-between;align-items:center;background:#1d1d1d;padding:14px;margin:10px 0;border-radius:12px}
+button{padding:10px 14px;border:0;border-radius:9px;font-weight:700}
+code{background:#222;padding:2px 5px;border-radius:5px}
+</style>
+</head>
+<body>
+<h1>Rebuild 3 — Test français Android</h1>
+<p>Ces deux petits fichiers permettent de vérifier le copier/coller avant de générer le pack complet.</p>
+<p>Dans le jeu : <code>Config → Modding → Install Mod → Coller → Okay</code>.</p>
+<div class="card"><span>1. Ressources</span><button data-f="fr_resources_test.properties">Copier</button></div>
+<div class="card"><span>2. Règles grammaticales</span><button data-f="fr_rules_test.properties">Copier</button></div>
+<script>
+document.querySelectorAll('button').forEach(b=>b.onclick=async()=>{
+  const t=await (await fetch(b.dataset.f)).text();
+  await navigator.clipboard.writeText(t);
+  b.textContent='Copié ✓';
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,17 @@
+# Generated translation/output
+rebuild3_fr_output/
+
+# Optional local source archive
+source/*.zip
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Editors / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
