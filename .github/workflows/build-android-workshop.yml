@@ -15,33 +15,77 @@ permissions:
 jobs:
   build:
     runs-on: [self-hosted, Windows, X64, rebuild3]
-    timeout-minutes: 60
+    timeout-minutes: 90
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
       - name: Java 17
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: "17"
 
-      - name: Android SDK
-        uses: android-actions/setup-android@v3
-
-      - name: Install Android platform
+      - name: Install Android SDK
         shell: powershell
-        run: sdkmanager "platform-tools" "platforms;android-35" "build-tools;35.0.0"
+        run: |
+          $ErrorActionPreference = "Stop"
 
-      - name: Gradle 8.9
-        uses: gradle/actions/setup-gradle@v4
-        with:
-          gradle-version: "8.9"
+          $sdkRoot = Join-Path $env:USERPROFILE ".android\sdk"
+          $sdkManager = Join-Path $sdkRoot "cmdline-tools\latest\bin\sdkmanager.bat"
+
+          if (-not (Test-Path $sdkManager)) {
+            $zip = Join-Path $env:RUNNER_TEMP "android-commandline-tools.zip"
+            $extract = Join-Path $env:RUNNER_TEMP "android-commandline-tools"
+
+            Remove-Item $zip -Force -ErrorAction SilentlyContinue
+            Remove-Item $extract -Recurse -Force -ErrorAction SilentlyContinue
+
+            Invoke-WebRequest -Uri "https://dl.google.com/android/repository/commandlinetools-win-12266719_latest.zip" -OutFile $zip
+            Expand-Archive -LiteralPath $zip -DestinationPath $extract -Force
+
+            $latest = Join-Path $sdkRoot "cmdline-tools\latest"
+            New-Item -ItemType Directory -Force -Path $latest | Out-Null
+            Copy-Item (Join-Path $extract "cmdline-tools\*") $latest -Recurse -Force
+          }
+
+          "ANDROID_HOME=$sdkRoot" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "ANDROID_SDK_ROOT=$sdkRoot" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          (Join-Path $sdkRoot "platform-tools") | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          (Join-Path $sdkRoot "cmdline-tools\latest\bin") | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+
+          $answers = [string]::Join([Environment]::NewLine, (1..50 | ForEach-Object { "y" }))
+          $answers | & $sdkManager --licenses | Out-Host
+
+          & $sdkManager "platform-tools" "platforms;android-35" "build-tools;35.0.0"
+
+      - name: Install Gradle 8.9
+        shell: powershell
+        run: |
+          $ErrorActionPreference = "Stop"
+
+          $gradleRoot = Join-Path $env:RUNNER_TOOL_CACHE "gradle-8.9"
+          $gradleExe = Join-Path $gradleRoot "gradle-8.9\bin\gradle.bat"
+
+          if (-not (Test-Path $gradleExe)) {
+            $zip = Join-Path $env:RUNNER_TEMP "gradle-8.9-bin.zip"
+            Remove-Item $zip -Force -ErrorAction SilentlyContinue
+            Remove-Item $gradleRoot -Recurse -Force -ErrorAction SilentlyContinue
+
+            Invoke-WebRequest -Uri "https://services.gradle.org/distributions/gradle-8.9-bin.zip" -OutFile $zip
+            New-Item -ItemType Directory -Force -Path $gradleRoot | Out-Null
+            Expand-Archive -LiteralPath $zip -DestinationPath $gradleRoot -Force
+          }
+
+          (Join-Path $gradleRoot "gradle-8.9\bin") | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          & $gradleExe --version
 
       - name: Build debug APK
         shell: powershell
-        run: gradle -p android-workshop --no-daemon clean assembleDebug
+        run: |
+          $gradleExe = Join-Path $env:RUNNER_TOOL_CACHE "gradle-8.9\gradle-8.9\bin\gradle.bat"
+          & $gradleExe -p android-workshop --no-daemon clean assembleDebug
 
       - name: Prepare artifact
         shell: powershell
