@@ -270,72 +270,109 @@ class Translator:
             f"Échec de traduction après {max_attempts} tentatives : {last_error}"
         )
 
+    def _translate_fragment(self, text: str) -> str:
+        """Traduit uniquement le texte humain en conservant les espaces externes."""
+        if not text or not re.search(r"[A-Za-z]", text):
+            return text
+
+        match = re.match(r"^(\s*)(.*?)(\s*)$", text, re.DOTALL)
+        if not match:
+            return self.translate_plain(text)
+
+        prefix, core, suffix = match.groups()
+        if not core or not re.search(r"[A-Za-z]", core):
+            return text
+
+        return prefix + self.translate_plain(core) + suffix
+
+    def _translate_square_token(self, token: str) -> str:
+        """Conserve la syntaxe [..] et ne traduit que ses branches textuelles."""
+        inside = token[1:-1]
+
+        # Variables simples : [Name], [CityName], etc.
+        if "|" not in inside:
+            return token
+
+        parts = inside.split("|")
+
+        # Constructions genrées/plurielles du moteur Rebuild.
+        if parts[0] in {"g", "g2", "p"}:
+            translated = [parts[0]]
+            translated.extend(self.translate_value(part) for part in parts[1:])
+            return "[" + "|".join(translated) + "]"
+
+        # Variantes [one|two|three], éventuellement préfixées par *.
+        translated = []
+        for pos, part in enumerate(parts):
+            star = ""
+            if pos == 0 and part.startswith("*"):
+                star = "*"
+                part = part[1:]
+            translated.append(star + self.translate_value(part))
+        return "[" + "|".join(translated) + "]"
+
     def translate_value(self, value: str) -> str:
+        """
+        Traduit sans jamais envoyer les placeholders Rebuild à l'IA.
+
+        Les tokens [Name], {1}, %s, \\n, URLs, etc. sont retirés du texte transmis
+        à Ollama puis réinjectés directement. Cela élimine le risque qu'un modèle
+        renomme, espace ou supprime un placeholder.
+        """
         if not value or not re.search(r"[A-Za-z]", value):
             return value
 
-        placeholders = {}
-        index = 0
-
-        def mask(token: str) -> str:
-            nonlocal index
-            key = f"ZXQPH{index:05d}QXZ"
-            index += 1
-            placeholders[key] = token
-            return key
-
-        def square_repl(match: re.Match) -> str:
-            token = match.group(0)
-            inside = token[1:-1]
-
-            if "|" not in inside:
-                return mask(token)
-
-            parts = inside.split("|")
-            if parts[0] in {"g", "g2", "p"}:
-                rebuilt = "[" + "|".join(
-                    [parts[0]] + [self.translate_value(part) for part in parts[1:]]
-                ) + "]"
-                return mask(rebuilt)
-
-            translated = []
-            for pos, part in enumerate(parts):
-                star = ""
-                if pos == 0 and part.startswith("*"):
-                    star = "*"
-                    part = part[1:]
-                translated.append(star + self.translate_value(part))
-            return mask("[" + "|".join(translated) + "]")
-
-        protected = SQUARE_RE.sub(square_repl, value)
-        protected = CURLY_RE.sub(lambda m: mask(m.group(0)), protected)
-        protected = PRINTF_RE.sub(lambda m: mask(m.group(0)), protected)
-        protected = ESCAPE_RE.sub(lambda m: mask(m.group(0)), protected)
-        protected = URL_RE.sub(lambda m: mask(m.group(0)), protected)
-
-        translated = self.translate_plain(protected)
-
-        # Vérification stricte avant restauration.
-        missing = [
-            key
-            for key in placeholders
-            if key not in translated
-            and key.lower() not in translated
-            and key.upper() not in translated
+        protected_patterns = [
+            ("square", SQUARE_RE),
+            ("curly", CURLY_RE),
+            ("printf", PRINTF_RE),
+            ("escape", ESCAPE_RE),
+            ("url", URL_RE),
         ]
-        if missing:
-            eprint(
-                f"      Placeholder(s) altéré(s) par le modèle : "
-                f"{', '.join(missing[:3])}. Valeur anglaise conservée."
-            )
-            return value
 
-        for key, original in placeholders.items():
-            translated = translated.replace(key, original)
-            translated = translated.replace(key.lower(), original)
-            translated = translated.replace(key.upper(), original)
+        result = []
+        cursor = 0
+        length = len(value)
 
-        return translated
+        while cursor < length:
+            next_kind = None
+            next_match = None
+
+            for kind, pattern in protected_patterns:
+                match = pattern.search(value, cursor)
+                if match is None:
+                    continue
+                if next_match is None or match.start() < next_match.start():
+                    next_kind = kind
+                    next_match = match
+                elif (
+                    next_match is not None
+                    and match.start() == next_match.start()
+                    and match.end() > next_match.end()
+                ):
+                    # En cas de chevauchement, protège le token le plus long.
+                    next_kind = kind
+                    next_match = match
+
+            if next_match is None:
+                result.append(self._translate_fragment(value[cursor:]))
+                break
+
+            if next_match.start() > cursor:
+                result.append(
+                    self._translate_fragment(value[cursor:next_match.start()])
+                )
+
+            token = next_match.group(0)
+            if next_kind == "square":
+                result.append(self._translate_square_token(token))
+            else:
+                # Ne jamais envoyer ces tokens à Ollama.
+                result.append(token)
+
+            cursor = next_match.end()
+
+        return "".join(result)
 
 def split_key_value(line: str):
     match = KEY_RE.match(line)
