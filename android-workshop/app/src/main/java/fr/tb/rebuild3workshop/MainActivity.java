@@ -4,7 +4,6 @@ import android.app.Activity;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.graphics.Color;
-import android.net.Uri;
 import android.os.Bundle;
 import android.provider.Settings;
 import android.view.View;
@@ -50,19 +49,14 @@ public class MainActivity extends Activity {
         root.addView(text("Rebuild 3 Workshop", 26, true));
 
         TextView intro = text(
-            "V0.3 — Overlay + clavier spécialisé\n\n" +
-            "L'overlay affiche la progression au-dessus de Rebuild 3. " +
-            "Le clavier Workshop écrit directement dans Install Mod par petits blocs, " +
-            "sans gros collage presse-papiers.", 16, false);
+            "V0.2 — Clavier spécialisé\n\n" +
+            "Le clavier écrit directement dans Install Mod par petits blocs. " +
+            "Pas d'overlay, pas d'Accessibility et pas de gros collage presse-papiers.",
+            16, false);
         intro.setPadding(0, dp(8), 0, dp(16));
         root.addView(intro);
 
-        root.addView(section("1. Overlay"));
-        root.addView(button("Autoriser l'overlay", v -> openOverlayPermission()));
-        root.addView(button("Afficher l'overlay", v -> startOverlay()));
-        root.addView(button("Fermer l'overlay", v -> stopOverlay()));
-
-        root.addView(section("2. Activer le clavier"));
+        root.addView(section("1. Activer le clavier"));
         root.addView(button("Activer Rebuild Workshop Keyboard", v ->
             startActivity(new Intent(Settings.ACTION_INPUT_METHOD_SETTINGS))));
         root.addView(button("Choisir Rebuild Workshop Keyboard", v -> {
@@ -71,13 +65,15 @@ public class MainActivity extends Activity {
             imm.showInputMethodPicker();
         }));
 
-        root.addView(section("3. Télécharger"));
+        root.addView(section("2. Télécharger"));
         root.addView(button("Pack Android multi-fichiers — recommandé", v ->
             downloadFromManifest(DownloadMode.ANDROID_MULTI)));
+        root.addView(button("Pack complet — 1 fichier (test clavier)", v ->
+            downloadFromManifest(DownloadMode.DESKTOP_FULL)));
         root.addView(button("TEST UI très court", v ->
             downloadFromManifest(DownloadMode.UI_TEST)));
 
-        root.addView(section("4. Ouvrir le jeu"));
+        root.addView(section("3. Ouvrir le jeu"));
         root.addView(button("Ouvrir Rebuild 3", v -> launchRebuild()));
         root.addView(button("Revenir au premier fichier", v -> {
             AppState.setCurrentPartIndex(this, 0);
@@ -92,13 +88,13 @@ public class MainActivity extends Activity {
 
         root.addView(text(
             "\nUtilisation :\n" +
-            "1) Autorise et affiche l'overlay.\n" +
-            "2) Active puis sélectionne le clavier Workshop.\n" +
-            "3) Télécharge le pack Android multi-fichiers.\n" +
-            "4) Ouvre Rebuild 3 → Config → Modding → Install Mod.\n" +
-            "5) Touche le champ blanc puis utilise « Bloc » ou « AUTO ».\n" +
-            "6) L'overlay et le clavier affichent le pourcentage.\n" +
-            "7) À 100 %, valide Okay puis passe au fichier suivant.",
+            "1) Active puis sélectionne le clavier Workshop.\n" +
+            "2) Télécharge le pack Android.\n" +
+            "3) Ouvre Rebuild 3 → Config → Modding → Install Mod.\n" +
+            "4) Touche le champ blanc.\n" +
+            "5) « Bloc » injecte 128 caractères ; « AUTO » enchaîne les blocs.\n" +
+            "6) Le clavier affiche le pourcentage.\n" +
+            "7) À 100 %, valide avec Okay puis utilise ▶ pour le fichier suivant.",
             14, false));
 
         return scroll;
@@ -131,16 +127,18 @@ public class MainActivity extends Activity {
                         desktop == null ? null : desktop.optJSONObject("file");
                     if (desktopFile == null) {
                         throw new IllegalStateException(
-                            "Version Desktop complète pas encore publiée");
+                            "Version complète pas encore publiée");
                     }
                     files.put(new JSONObject().put(
                         "name", desktopFile.getString("name")));
                     sourceName = "Pack complet clavier";
                 } else {
                     JSONObject android = manifest.optJSONObject("android");
-                    JSONArray sourceFiles = android != null
-                        ? android.getJSONArray("files")
-                        : manifest.getJSONArray("files");
+                    if (android == null) {
+                        throw new IllegalStateException(
+                            "Pack Android multi-fichiers absent du manifeste");
+                    }
+                    JSONArray sourceFiles = android.getJSONArray("files");
                     for (int i = 0; i < sourceFiles.length(); i++) {
                         files.put(sourceFiles.getJSONObject(i));
                     }
@@ -192,41 +190,6 @@ public class MainActivity extends Activity {
         }).start();
     }
 
-    private void openOverlayPermission() {
-        if (Settings.canDrawOverlays(this)) {
-            Toast.makeText(this, "Overlay déjà autorisé", Toast.LENGTH_SHORT).show();
-            return;
-        }
-
-        Intent intent = new Intent(
-            Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
-            Uri.parse("package:" + getPackageName())
-        );
-        startActivity(intent);
-    }
-
-    private void startOverlay() {
-        if (!Settings.canDrawOverlays(this)) {
-            Toast.makeText(this, "Autorise d'abord l'overlay", Toast.LENGTH_LONG).show();
-            openOverlayPermission();
-            return;
-        }
-
-        Intent intent = new Intent(this, OverlayService.class);
-        intent.setAction(OverlayService.ACTION_START);
-        if (android.os.Build.VERSION.SDK_INT >= 26) {
-            startForegroundService(intent);
-        } else {
-            startService(intent);
-        }
-    }
-
-    private void stopOverlay() {
-        Intent intent = new Intent(this, OverlayService.class);
-        intent.setAction(OverlayService.ACTION_STOP);
-        startService(intent);
-    }
-
     private void launchRebuild() {
         Intent intent = getPackageManager().getLaunchIntentForPackage(REBUILD_PACKAGE);
         if (intent == null) {
@@ -252,9 +215,7 @@ public class MainActivity extends Activity {
         statusView.setText(
             "Source : " + source +
             "\nFichiers : " + parts.length() +
-            "\nSélection : " + selected +
-            "\nOverlay : " +
-            (Settings.canDrawOverlays(this) ? "autorisé" : "non autorisé"));
+            "\nSélection : " + selected);
     }
 
     @Override
@@ -294,8 +255,7 @@ public class MainActivity extends Activity {
     }
 
     private int dp(int value) {
-        return Math.round(
-            value * getResources().getDisplayMetrics().density);
+        return Math.round(value * getResources().getDisplayMetrics().density);
     }
 
     private static String httpGetText(String url) throws Exception {
