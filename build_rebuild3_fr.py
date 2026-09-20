@@ -796,101 +796,70 @@ def write_ui_probe(sections: list[tuple[str, list[str]]], site_dir: Path) -> Pat
     return path
 
 
-def write_android_safe_pack(
+def _section_records(category: str, lines: list[str]) -> list[list[str]]:
+    header = [
+        "; ============================================================",
+        f"; {category}",
+        "; ============================================================",
+        "",
+    ]
+    grouped = group_records(lines)
+    if grouped:
+        grouped[0] = header + grouped[0]
+        return grouped
+    return [header]
+
+
+def write_android_pack(
     sections: list[tuple[str, list[str]]],
     site_dir: Path,
-    max_kb: int = 160,
+    max_kb: int = 24,
 ) -> list[Path]:
     """
-    Génère des morceaux sûrs pour Android.
-
-    La première partie contient volontairement l'interface/menu et les règles
-    essentielles afin que les menus soient traduits même avant les gros textes.
-    Les parties suivantes restent sous une cible d'environ max_kb.
+    Version Android multi-fichier.
+    Chaque partie reste volontairement petite afin de contourner les limites
+    pratiques du champ Install Mod / AIR sur Android.
     """
-    max_bytes = max(64, max_kb) * 1024
-    core_order = ["snippets", "rules", "resources", "scenes", "tutorial"]
-    section_map = {name: lines for name, lines in sections}
-
-    def section_records(name: str, lines: list[str]) -> list[list[str]]:
-        header = [
-            "; ============================================================",
-            f"; {name}",
-            "; ============================================================",
-            "",
-        ]
-        grouped = group_records(lines)
-        if grouped:
-            grouped[0] = header + grouped[0]
-            return grouped
-        return [header]
-
-    # Partie 1 : menu/interface/règles, volontairement petite.
-    core_lines: list[str] = []
-    used = set()
-    for name in core_order:
-        if name not in section_map:
-            continue
-        used.add(name)
-        for record in section_records(name, section_map[name]):
-            core_lines.extend(record)
-
-    chunks: list[list[str]] = [core_lines]
-
-    # Reste du contenu : découpage strict par taille de records.
+    max_bytes = max(8, int(max_kb)) * 1024
+    chunks: list[list[str]] = []
     current: list[str] = []
     current_size = 0
 
-    for name, lines in sections:
-        if name in used:
-            continue
-
-        for record in section_records(name, lines):
+    for category, lines in sections:
+        for record in _section_records(category, lines):
             raw = "\n".join(record) + "\n"
-            record_size = len(raw.encode("utf-8"))
+            size = len(raw.encode("utf-8"))
 
-            if record_size > max_bytes:
-                # Cas théorique d'une propriété gigantesque : elle reste seule.
-                if current:
-                    chunks.append(current)
-                    current = []
-                    current_size = 0
-                chunks.append(record)
-                continue
+            if current and current_size + size > max_bytes:
+                chunks.append(current)
+                current = []
+                current_size = 0
 
-            if current and current_size + record_size > max_bytes:
+            if size > max_bytes and current:
                 chunks.append(current)
                 current = []
                 current_size = 0
 
             current.extend(record)
-            current_size += record_size
+            current_size += size
+
+            if size > max_bytes:
+                chunks.append(current)
+                current = []
+                current_size = 0
 
     if current:
         chunks.append(current)
 
-    total_parts = len(chunks)
+    total = len(chunks)
     written: list[Path] = []
 
-    for part, chunk in enumerate(chunks, 1):
-        filename = f"fr_rebuild3_{part:02d}_sur_{total_parts:02d}.properties"
-        path = site_dir / filename
-
-        if part == 1:
-            description = (
-                "Interface, menus, règles et textes essentiels en français. "
-                f"Partie 1 sur {total_parts}; installer toutes les parties."
-            )
-        else:
-            description = (
-                f"Traduction française de Rebuild 3 - partie {part} sur "
-                f"{total_parts}. Installer toutes les parties dans l'ordre."
-            )
-
+    for number, chunk in enumerate(chunks, 1):
+        path = site_dir / f"fr_rebuild3_android_{number:03d}_sur_{total:03d}.properties"
         body = (
             "mod_type = language\n"
-            f"mod_name = Rebuild 3 - Français {part}/{total_parts}\n"
-            f"mod_description = {description}\n"
+            f"mod_name = Rebuild 3 - Français Android {number}/{total}\n"
+            f"mod_description = Traduction française Android - partie {number} sur {total}.\n"
             "mod_language_name = Français\n"
             "mod_locale_id = FR\n\n"
             + "\n".join(chunk).rstrip()
@@ -901,7 +870,37 @@ def write_android_safe_pack(
 
     return written
 
-def build_index(files: list[Path], site_dir: Path, ui_probe: Path | None = None):
+
+def write_desktop_pack(
+    sections: list[tuple[str, list[str]]],
+    site_dir: Path,
+) -> Path:
+    """Version PC/Desktop complète en un seul fichier."""
+    path = site_dir / "fr_rebuild3_desktop_complet.properties"
+    body = [
+        "mod_type = language",
+        "mod_name = Rebuild 3 - Français Desktop complet",
+        "mod_description = Traduction française complète de Rebuild 3 pour PC/Desktop.",
+        "mod_language_name = Français",
+        "mod_locale_id = FR",
+        "",
+    ]
+
+    for category, lines in sections:
+        body.extend([
+            "; ============================================================",
+            f"; {category}",
+            "; ============================================================",
+            "",
+        ])
+        body.extend(lines)
+        body.append("")
+
+    path.write_text("\n".join(body).rstrip() + "\n", "utf-8")
+    return path
+
+
+def build_index(files: list[Path], site_dir: Path, ui_probe: Path | None = None, desktop_file: Path | None = None):
     cards = []
     fr_cards = []
 
@@ -945,6 +944,21 @@ def build_index(files: list[Path], site_dir: Path, ui_probe: Path | None = None)
             '</article>'
         )
 
+    desktop_card = ""
+    if desktop_file is not None:
+        desktop_size = desktop_file.stat().st_size / 1024
+        desktop_card = (
+            '<article class="card">'
+            '<div>'
+            '<strong>PC / Desktop <span class="badge">1 fichier</span></strong>'
+            f'<small>{desktop_size:.1f} KiB — version complète en un seul fichier.</small>'
+            '</div>'
+            '<div class="actions">'
+            f'<a class="link secondary" href="{html.escape(desktop_file.name)}">Télécharger</a>'
+            '</div>'
+            '</article>'
+        )
+
     page = """<!doctype html>
 <html lang="fr">
 <head>
@@ -982,6 +996,9 @@ h2{margin-top:32px}
 installe toutes les parties <b>dans l'ordre indiqué</b> via
 <code>Config → Modding → Install Mod</code>, puis redémarre le jeu.
 </section>
+
+<h2>PC / Desktop</h2>
+<section class="grid">__DESKTOP_CARD__</section>
 
 <h2>Diagnostic Android</h2>
 <section class="grid">__PROBE_CARD__</section>
@@ -1065,7 +1082,7 @@ document.querySelectorAll('button[data-file]').forEach(btn=>{
 </script>
 </body>
 </html>
-""".replace("__FR_CARDS__", "".join(cards)).replace("__PROBE_CARD__", probe_card)
+""".replace("__FR_CARDS__", "".join(cards)).replace("__PROBE_CARD__", probe_card).replace("__DESKTOP_CARD__", desktop_card)
 
     (site_dir / "index.html").write_text(page, "utf-8")
 
@@ -1196,10 +1213,11 @@ def main():
         sections.append((category, translated))
         translator.save()
 
-    print("[4/5] Génération du pack Android et du test UI...")
+    print("[4/5] Génération Android multi-fichier + Desktop complet...")
     ui_probe = write_ui_probe(sections, site)
-    fr_files = write_android_safe_pack(sections, site, max_kb=160)
-    build_index(fr_files, site, ui_probe=ui_probe)
+    fr_files = write_android_pack(sections, site, max_kb=24)
+    desktop_file = write_desktop_pack(sections, site)
+    build_index(fr_files, site, ui_probe=ui_probe, desktop_file=desktop_file)
 
     manifest = {
         "source": SOURCE_URL,
@@ -1210,10 +1228,18 @@ def main():
             "bytes": ui_probe.stat().st_size,
             "characters": len(ui_probe.read_text("utf-8")),
         },
-        "files": [
-            {"name": path.name, "bytes": path.stat().st_size}
-            for path in fr_files
-        ],
+        "android": {
+            "files": [
+                {"name": path.name, "bytes": path.stat().st_size}
+                for path in fr_files
+            ],
+        },
+        "desktop": {
+            "file": {
+                "name": desktop_file.name,
+                "bytes": desktop_file.stat().st_size,
+            },
+        },
     }
     (site / "manifest.json").write_text(
         json.dumps(manifest, ensure_ascii=False, indent=2),
@@ -1227,6 +1253,11 @@ def main():
         f"{ui_probe.stat().st_size / 1024:.1f} KiB / "
         f"{len(ui_probe.read_text('utf-8'))} caractères"
     )
+    print(
+        f"      Desktop : {desktop_file.name} - "
+        f"{desktop_file.stat().st_size / 1024:.1f} KiB"
+    )
+    print(f"      Android : {len(fr_files)} partie(s)")
     for path in fr_files:
         print(f"      {path.name} : {path.stat().st_size / 1024:.1f} KiB")
 
