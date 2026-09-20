@@ -24,6 +24,7 @@ jobs:
       OLLAMA_URL: 'http://127.0.0.1:11434'
       PYTHONUTF8: '1'
       PYTHONIOENCODING: 'utf-8'
+      PYTHONUNBUFFERED: '1'
 
     steps:
       - uses: actions/checkout@v4
@@ -73,7 +74,7 @@ jobs:
         run: |
           chcp 65001 > $null
           [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
-          python build_rebuild3_fr.py `
+          python -u build_rebuild3_fr.py `
             --chunk-kb 180 `
             --cache "$env:REBUILD3_CACHE" `
             --provider ollama `
