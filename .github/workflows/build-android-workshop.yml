@@ -37,18 +37,43 @@ jobs:
         run: |
           $ErrorActionPreference = "Stop"
 
-          $SdkRoot = "D:\\000-Rebuild3\\android-sdk"
-          $SdkManager = Join-Path $SdkRoot "cmdline-tools\\latest\\bin\\sdkmanager.bat"
-          $PlatformDir = Join-Path $SdkRoot "platforms\\android-35"
-          $BuildToolsDir = Join-Path $SdkRoot "build-tools\\35.0.0"
+          $SdkRoot = "D:\000-Rebuild3\android-sdk"
+          $SdkManager = Join-Path $SdkRoot "cmdline-tools\latest\bin\sdkmanager.bat"
+          $PlatformDir = Join-Path $SdkRoot "platforms\android-35"
+          $BuildToolsDir = Join-Path $SdkRoot "build-tools\35.0.0"
 
           "ANDROID_HOME=$SdkRoot" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
           "ANDROID_SDK_ROOT=$SdkRoot" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
 
           if (-not (Test-Path $SdkManager)) {
-            throw "sdkmanager missing: $SdkManager"
-          }
+            Write-Host "Android command-line tools missing; installing them..."
 
+            $Zip = Join-Path $env:RUNNER_TEMP "android-commandline-tools.zip"
+            $Extract = Join-Path $env:RUNNER_TEMP "android-commandline-tools"
+            $CmdlineRoot = Join-Path $SdkRoot "cmdline-tools"
+            $Latest = Join-Path $CmdlineRoot "latest"
+
+            Remove-Item $Zip -Force -ErrorAction SilentlyContinue
+            Remove-Item $Extract -Recurse -Force -ErrorAction SilentlyContinue
+            Remove-Item $Latest -Recurse -Force -ErrorAction SilentlyContinue
+
+            New-Item -ItemType Directory -Force -Path $Extract | Out-Null
+            New-Item -ItemType Directory -Force -Path $CmdlineRoot | Out-Null
+
+            Invoke-WebRequest -Uri "https://dl.google.com/android/repository/commandlinetools-win-12266719_latest.zip" -OutFile $Zip -UseBasicParsing
+            Expand-Archive -LiteralPath $Zip -DestinationPath $Extract -Force
+
+            $ExtractedTools = Join-Path $Extract "cmdline-tools"
+            if (-not (Test-Path $ExtractedTools)) {
+              throw "Unexpected Android command-line tools archive layout."
+            }
+
+            Move-Item -Path $ExtractedTools -Destination $Latest
+
+            if (-not (Test-Path $SdkManager)) {
+              throw "sdkmanager still missing after installation: $SdkManager"
+            }
+          }
           if ((Test-Path $PlatformDir) -and (Test-Path $BuildToolsDir)) {
             Write-Host "Android SDK 35 already installed."
             exit 0
