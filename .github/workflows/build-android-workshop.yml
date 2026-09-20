@@ -32,6 +32,7 @@ jobs:
           java-version: "17"
 
       - name: Prepare Android SDK
+        timeout-minutes: 15
         shell: powershell
         run: |
           $ErrorActionPreference = "Stop"
@@ -69,7 +70,22 @@ jobs:
           "ANDROID_HOME=$SdkRoot" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
           "ANDROID_SDK_ROOT=$SdkRoot" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
 
-          & $SdkManager --sdk_root=$SdkRoot "platform-tools" "platforms;android-35" "build-tools;35.0.0"
+          $PlatformDir = Join-Path $SdkRoot "platforms\\android-35"
+          $BuildToolsDir = Join-Path $SdkRoot "build-tools\\35.0.0"
+
+          if ((Test-Path $PlatformDir) -and (Test-Path $BuildToolsDir)) {
+            Write-Host "Android SDK 35 already installed."
+          } else {
+            $YesFile = Join-Path $env:RUNNER_TEMP "sdk-yes.txt"
+            (1..100 | ForEach-Object { "y" }) | Set-Content -Path $YesFile -Encoding ascii
+
+            $Command = "type `"$YesFile`" | `"$SdkManager`" --sdk_root=`"$SdkRoot`" `"platform-tools`" `"platforms;android-35`" `"build-tools;35.0.0`""
+            cmd.exe /d /c $Command
+
+            if ($LASTEXITCODE -ne 0) {
+              throw "sdkmanager failed with exit code $LASTEXITCODE"
+            }
+          }
 
       - name: Prepare Gradle 8.9
         shell: powershell
