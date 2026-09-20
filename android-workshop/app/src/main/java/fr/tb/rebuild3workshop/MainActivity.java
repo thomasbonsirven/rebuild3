@@ -121,11 +121,14 @@ public class MainActivity extends Activity {
                     sourceName = "Diagnostic UI";
                 } else if (mode == DownloadMode.DESKTOP_FULL) {
                     JSONObject desktop = manifest.optJSONObject("desktop");
-                    if (desktop == null) {
+                    JSONObject desktopFile =
+                        desktop == null ? null : desktop.optJSONObject("file");
+                    if (desktopFile == null) {
                         throw new IllegalStateException(
                             "Version Desktop complète pas encore publiée");
                     }
-                    files.put(new JSONObject().put("name", desktop.getString("name")));
+                    files.put(new JSONObject().put(
+                        "name", desktopFile.getString("name")));
                     sourceName = "Pack complet clavier";
                 } else {
                     JSONObject android = manifest.optJSONObject("android");
