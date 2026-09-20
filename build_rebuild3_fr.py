@@ -762,6 +762,40 @@ def write_chunks(category: str, lines: list[str], out_dir: Path, max_bytes: int)
 
     return written
 
+def write_ui_probe(sections: list[tuple[str, list[str]]], site_dir: Path) -> Path:
+    """Petit pack de diagnostic UI, volontairement < 16 Kio."""
+    prefixes = ("button_", "label_", "notice_workshop", "tooltip_")
+    selected = []
+
+    for _category, lines in sections:
+        for line in lines:
+            match = KEY_RE.match(line)
+            if not match:
+                continue
+            key = match.group(1)
+            if key.startswith(prefixes):
+                selected.append(line)
+
+    path = site_dir / "fr_ui_test.properties"
+    body = (
+        "mod_type = language\n"
+        "mod_name = Français UI - TEST 16K\n"
+        "mod_description = Petit pack de diagnostic pour tester la limite de collage Android de Rebuild 3.\n"
+        "mod_language_name = Français UI TEST\n"
+        "mod_locale_id = FRUI\n\n"
+        + "\n".join(selected).rstrip()
+        + "\n"
+    )
+    path.write_text(body, "utf-8")
+
+    if len(body) >= 16 * 1024:
+        raise RuntimeError(
+            f"Le pack UI de test dépasse 16 Kio : {len(body)} caractères."
+        )
+
+    return path
+
+
 def write_android_safe_pack(
     sections: list[tuple[str, list[str]]],
     site_dir: Path,
@@ -867,7 +901,7 @@ def write_android_safe_pack(
 
     return written
 
-def build_index(files: list[Path], site_dir: Path):
+def build_index(files: list[Path], site_dir: Path, ui_probe: Path | None = None):
     cards = []
     fr_cards = []
 
@@ -893,6 +927,21 @@ def build_index(files: list[Path], site_dir: Path):
             f'<small>{size:.1f} KiB</small>'
             '</div>'
             f'<button data-file="../{html.escape(path.name)}">Copier {i}/{len(files)}</button>'
+            '</article>'
+        )
+
+    probe_card = ""
+    if ui_probe is not None:
+        probe_size = ui_probe.stat().st_size / 1024
+        probe_card = (
+            '<article class="card">'
+            '<div>'
+            '<strong>TEST UI &lt; 16 Kio <span class="badge">Diagnostic</span></strong>'
+            f'<small>{probe_size:.1f} KiB — teste uniquement la limite de collage et les menus.</small>'
+            '</div>'
+            '<div class="actions">'
+            f'<button data-file="{html.escape(ui_probe.name)}">Copier le test UI</button>'
+            '</div>'
             '</article>'
         )
 
@@ -934,7 +983,11 @@ installe toutes les parties <b>dans l'ordre indiqué</b> via
 <code>Config → Modding → Install Mod</code>, puis redémarre le jeu.
 </section>
 
-<h2>Traduction française <span class="badge">petits fichiers Android</span></h2>
+<h2>Diagnostic Android</h2>
+<section class="grid">__PROBE_CARD__</section>
+<p class="lead">Teste d'abord ce petit fichier. Les gros morceaux ci-dessous restent expérimentaux tant que la limite réelle de Rebuild n'est pas mesurée.</p>
+
+<h2>Traduction française <span class="badge">expérimental</span></h2>
 <section class="grid">__FR_CARDS__</section>
 
 <p><a class="link secondary" href="./fr/">Lien permanent vers la dernière traduction</a></p>
@@ -1012,7 +1065,7 @@ document.querySelectorAll('button[data-file]').forEach(btn=>{
 </script>
 </body>
 </html>
-""".replace("__FR_CARDS__", "".join(cards))
+""".replace("__FR_CARDS__", "".join(cards)).replace("__PROBE_CARD__", probe_card)
 
     (site_dir / "index.html").write_text(page, "utf-8")
 
@@ -1143,14 +1196,20 @@ def main():
         sections.append((category, translated))
         translator.save()
 
-    print("[4/5] Génération du pack Android en petits morceaux sûrs...")
+    print("[4/5] Génération du pack Android et du test UI...")
+    ui_probe = write_ui_probe(sections, site)
     fr_files = write_android_safe_pack(sections, site, max_kb=160)
-    build_index(fr_files, site)
+    build_index(fr_files, site, ui_probe=ui_probe)
 
     manifest = {
         "source": SOURCE_URL,
         "language": "fr",
         "locale_id": "FR",
+        "ui_probe": {
+            "name": ui_probe.name,
+            "bytes": ui_probe.stat().st_size,
+            "characters": len(ui_probe.read_text("utf-8")),
+        },
         "files": [
             {"name": path.name, "bytes": path.stat().st_size}
             for path in fr_files
@@ -1163,6 +1222,11 @@ def main():
 
     print("[5/5] Terminé.")
     print(f"      Site : {site}")
+    print(
+        f"      Test UI : {ui_probe.name} - "
+        f"{ui_probe.stat().st_size / 1024:.1f} KiB / "
+        f"{len(ui_probe.read_text('utf-8'))} caractères"
+    )
     for path in fr_files:
         print(f"      {path.name} : {path.stat().st_size / 1024:.1f} KiB")
 
