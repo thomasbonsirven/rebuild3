@@ -12,6 +12,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: android-workshop
+  cancel-in-progress: true
+
 jobs:
   build:
     runs-on: [self-hosted, Windows, X64, rebuild3]
