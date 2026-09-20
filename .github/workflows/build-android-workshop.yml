@@ -31,27 +31,52 @@ jobs:
           distribution: temurin
           java-version: "17"
 
-      - name: Check Android SDK
+      - name: Install or verify Android SDK
+        timeout-minutes: 20
         shell: powershell
         run: |
           $ErrorActionPreference = "Stop"
 
           $SdkRoot = "D:\\000-Rebuild3\\android-sdk"
+          $SdkManager = Join-Path $SdkRoot "cmdline-tools\\latest\\bin\\sdkmanager.bat"
           $PlatformDir = Join-Path $SdkRoot "platforms\\android-35"
           $BuildToolsDir = Join-Path $SdkRoot "build-tools\\35.0.0"
 
           "ANDROID_HOME=$SdkRoot" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
           "ANDROID_SDK_ROOT=$SdkRoot" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
 
-          Write-Host "SDK root: $SdkRoot"
-          Write-Host "Platform 35: $(Test-Path $PlatformDir)"
-          Write-Host "Build tools 35.0.0: $(Test-Path $BuildToolsDir)"
+          if (-not (Test-Path $SdkManager)) {
+            throw "sdkmanager missing: $SdkManager"
+          }
+
+          if ((Test-Path $PlatformDir) -and (Test-Path $BuildToolsDir)) {
+            Write-Host "Android SDK 35 already installed."
+            exit 0
+          }
+
+          $Licenses = Join-Path $SdkRoot "licenses"
+          New-Item -ItemType Directory -Force -Path $Licenses | Out-Null
+          @(
+            "8933bad161af4178b1185d1a37fbf41ea5269c55",
+            "d56f5187479451eabf01fb78af6dfcb131a6481e"
+          ) | Set-Content -Path (Join-Path $Licenses "android-sdk-license") -Encoding ascii
+
+          $YesFile = Join-Path $env:RUNNER_TEMP "sdk-yes.txt"
+          (1..200 | ForEach-Object { "y" }) | Set-Content -Path $YesFile -Encoding ascii
+
+          $InstallCmd = "type `"$YesFile`" | call `"$SdkManager`" --sdk_root=`"$SdkRoot`" --verbose `"platforms;android-35`" `"build-tools;35.0.0`""
+          Write-Host "Installing Android platform/build-tools..."
+          cmd.exe /d /c $InstallCmd
+
+          if ($LASTEXITCODE -ne 0) {
+            throw "sdkmanager failed with exit code $LASTEXITCODE"
+          }
 
           if (-not (Test-Path $PlatformDir)) {
-            throw "Missing Android platform: $PlatformDir"
+            throw "Android platform 35 still missing after sdkmanager"
           }
           if (-not (Test-Path $BuildToolsDir)) {
-            throw "Missing Android build-tools: $BuildToolsDir"
+            throw "Android build-tools 35.0.0 still missing after sdkmanager"
           }
 
       - name: Prepare Gradle 8.9
