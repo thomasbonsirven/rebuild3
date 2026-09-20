@@ -1,6 +1,6 @@
 mod_type = config
-mod_name = Coup de Pouce
-mod_description = Cheat leger et discret : un peu plus de ressources, progression plus rapide, fermes et munitions legerement plus efficaces, sans affaiblir zombies, hordes, factions ou evenements.
+mod_name = Coup de Pouce v1.1
+mod_description = Cheat leger mais perceptible : progression et economie un peu plus confortables, sans affaiblir zombies, hordes, factions ou evenements.
 
 ; =============================================================
 ; COUP DE POUCE
@@ -22,8 +22,8 @@ STARTING_MEDICINE = 6, 6, 6, 6, 6
 ; ECONOMIE : environ +10 a +20 %, juste assez pour moins grinder
 ; -------------------------------------------------------------
 
-BASE_FOOD_PER_FARM = 2.75, 2.20, 1.65, 1.65, 1.10
-BASE_FOOD_STORAGE = 60, 60, 60, 60, 60
+BASE_FOOD_PER_FARM = 3.00, 2.40, 1.80, 1.70, 1.15
+BASE_FOOD_STORAGE = 75, 65, 60, 60, 55
 FERTILIZER_FOOD_BONUS = 0.55, 0.55, 0.55, 0.55, 0.55
 
 ; Une unite de munitions dure un peu plus longtemps
@@ -33,7 +33,10 @@ USES_PER_AMMO = 4, 4, 4, 4, 4
 ; SURVIVANTS : progression legerement acceleree
 ; -------------------------------------------------------------
 
-EXPERIENCE_MULTIPLIER = 2.00, 1.15, 0.95, 0.85, 0.60
+; +1 aux tests de competence en NORMAL/CHALLENGING, sans rendre invincible
+COLIN_BONUS_LEVELS = 1, 1, 1, 0, 0
+
+EXPERIENCE_MULTIPLIER = 2.00, 1.25, 1.00, 0.90, 0.65
 
 ; Un peu plus de chances qu'un mauvais jet se termine en blessure
 ; plutot qu'en mort. Les morts restent totalement possibles.
