@@ -1,0 +1,60 @@
+mod_type = config
+mod_name = Coup de Pouce
+mod_description = Cheat leger et discret : un peu plus de ressources, progression plus rapide, fermes et munitions legerement plus efficaces, sans affaiblir zombies, hordes, factions ou evenements.
+
+; =============================================================
+; COUP DE POUCE
+; Cheat leger : confort et progression, sans supprimer le danger.
+; Ordre : EASY, NORMAL, CHALLENGING, HARD, IMPOSSIBLE
+; =============================================================
+
+; -------------------------------------------------------------
+; DEPART : petit matelas de securite, sans stock illimite
+; -------------------------------------------------------------
+
+STARTING_FOOD = 60, 60, 60, 45, 32
+STARTING_MATERIALS = 24, 24, 24, 24, 24
+STARTING_AMMO = 12, 12, 12, 12, 12
+STARTING_FUEL = 6, 6, 6, 6, 6
+STARTING_MEDICINE = 6, 6, 6, 6, 6
+
+; -------------------------------------------------------------
+; ECONOMIE : environ +10 a +20 %, juste assez pour moins grinder
+; -------------------------------------------------------------
+
+BASE_FOOD_PER_FARM = 2.75, 2.20, 1.65, 1.65, 1.10
+BASE_FOOD_STORAGE = 60, 60, 60, 60, 60
+FERTILIZER_FOOD_BONUS = 0.55, 0.55, 0.55, 0.55, 0.55
+
+; Une unite de munitions dure un peu plus longtemps
+USES_PER_AMMO = 4, 4, 4, 4, 4
+
+; -------------------------------------------------------------
+; SURVIVANTS : progression legerement acceleree
+; -------------------------------------------------------------
+
+EXPERIENCE_MULTIPLIER = 2.00, 1.15, 0.95, 0.85, 0.60
+
+; Un peu plus de chances qu'un mauvais jet se termine en blessure
+; plutot qu'en mort. Les morts restent totalement possibles.
+INJURY_CHANCE_BASE = 0.55, 0.30, 0.30, 0.30, 0.15
+
+; Les survivants apparaissent legerement plus souvent
+SURVIVOR_ARRIVES_MULTIPLIER = 1.25, 1.10, 1.10, 0.85, 0.60
+
+; -------------------------------------------------------------
+; DEFENSE : petit bonus, pas de forteresse invincible
+; -------------------------------------------------------------
+
+DEFENSIVE_BUILDING_BONUS = 11, 11, 11, 11, 11
+UPGRADE_TOWER_BONUS = 6, 6, 6, 6, 6
+UPGRADE_BUNKER_BONUS = 11, 11, 11, 11, 11
+UPGRADE_TURRET_BONUS = 17, 17, 17, 17, 17
+
+; -------------------------------------------------------------
+; COMMERCE / RAID : moins punitif, mais toujours significatif
+; -------------------------------------------------------------
+
+MIN_DAYS_BETWEEN_MEET_TRADE = 2, 2, 2, 2, 2
+PERCENT_STEALABLE_RESOURCE = 0.20, 0.40, 0.40, 0.40, 0.65
+MAX_STEALABLE_RESOURCE = 18, 32, 32, 32, 50
