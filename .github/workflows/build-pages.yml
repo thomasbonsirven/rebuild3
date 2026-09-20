@@ -79,7 +79,9 @@ jobs:
             --cache "$env:REBUILD3_CACHE" `
             --provider ollama `
             --ollama-url "$env:OLLAMA_URL" `
-            --ollama-model "$env:OLLAMA_MODEL"
+            --ollama-model "$env:OLLAMA_MODEL" `
+            --batch-size 20 `
+            --batch-chars 6000
 
       - name: Validate generated keys
         shell: powershell
