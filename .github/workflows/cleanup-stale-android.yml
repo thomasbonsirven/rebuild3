@@ -18,7 +18,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          for run_id in 35531779135; do
+          for run_id in 35531837223; do
             echo "Force cancelling $run_id"
             gh api --method POST "repos/${{ github.repository }}/actions/runs/$run_id/force-cancel" || true
           done
