@@ -834,7 +834,7 @@ Copier → Rebuild 3 → <code>Config → Modding → Install Mod</code> → Col
   </div>
   <div class="actions">
     <button data-file="fr_rebuild3_complet.properties">Copier la traduction</button>
-    <a class="link secondary" href="./fr_rebuild3_complet.properties">Lien permanent</a>
+    <a class="link secondary" href="./fr/">Lien permanent</a>
   </div>
 </article>
 </section>
@@ -915,6 +915,58 @@ document.querySelectorAll('button[data-file]').forEach(btn=>{
 """.replace("__SIZE__", f"{size:.1f}")
 
     (site_dir / "index.html").write_text(page, "utf-8")
+
+    fr_dir = site_dir / "fr"
+    fr_dir.mkdir(parents=True, exist_ok=True)
+    latest_page = """<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Rebuild 3 — Traduction FR</title>
+<style>
+:root{color-scheme:dark;font-family:system-ui,-apple-system,"Segoe UI",sans-serif}
+body{margin:0;background:#111;color:#eee}
+main{width:min(720px,92vw);margin:48px auto}
+.card{background:#181818;border:1px solid #303030;border-radius:14px;padding:22px}
+p{color:#bbb;line-height:1.55}
+button,a{display:inline-block;border:0;border-radius:10px;padding:12px 16px;font-weight:700;text-decoration:none;cursor:pointer}
+button{background:#eee;color:#111}
+a{background:#2a2a2a;color:#eee;border:1px solid #444;margin-left:8px}
+code{background:#222;padding:.12rem .35rem;border-radius:5px}
+#status{margin-top:14px;color:#bbb}
+</style>
+</head>
+<body>
+<main>
+<div class="card">
+<h1>Rebuild 3 — Français</h1>
+<p>Ce lien reste permanent. Le bouton récupère toujours la dernière traduction publiée.</p>
+<p>Installation : <code>Config → Modding → Install Mod</code> puis colle le contenu.</p>
+<button id="copy">Copier la dernière version</button>
+<a href="../">Accueil</a>
+<div id="status"></div>
+</div>
+</main>
+<script>
+document.getElementById('copy').onclick=async function(){
+  const status=document.getElementById('status');
+  try{
+    const r=await fetch('../fr_rebuild3_complet.properties',{cache:'no-store'});
+    if(!r.ok)throw new Error('HTTP '+r.status);
+    const text=await r.text();
+    await navigator.clipboard.writeText(text);
+    this.textContent='Copié ✓';
+    status.textContent='Dernière traduction copiée dans le presse-papiers.';
+  }catch(e){
+    status.textContent='Erreur : '+e.message;
+  }
+};
+</script>
+</body>
+</html>
+"""
+    (fr_dir / "index.html").write_text(latest_page, "utf-8")
 
 def main():
     ap = argparse.ArgumentParser()
