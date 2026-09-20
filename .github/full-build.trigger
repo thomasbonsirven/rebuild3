@@ -1,2 +1,2 @@
-trigger: ui-paste-diagnostic
-reason: publish sub-16KB UI test to measure Rebuild Android paste limit
+trigger: publish android-multifile-desktop-single
+reason: publish Android multi-file pack, Desktop single-file pack and manifest for Workshop app
