@@ -18,6 +18,7 @@ SOURCE_URL = "https://rebuildgame.com/rebuild3_mod_sources_2024.zip"
 DEFAULT_OUT = Path("rebuild3_fr_output")
 BUNDLED_SOURCE = Path(__file__).resolve().parent / "source" / "rebuild3_mod_sources_2024.zip"
 DEFAULT_CHUNK_KB = 180
+DEFAULT_REQUEST_INTERVAL = 1.0  # secondes entre deux appels Google
 
 META_KEYS = {
     "mod_type",
@@ -58,7 +59,7 @@ def safe_extract(archive: zipfile.ZipFile, dest: Path) -> None:
     archive.extractall(dest)
 
 class Translator:
-    def __init__(self, cache_path: Path):
+    def __init__(self, cache_path: Path, request_interval: float = DEFAULT_REQUEST_INTERVAL):
         try:
             from deep_translator import GoogleTranslator
         except ImportError:
@@ -69,8 +70,11 @@ class Translator:
 
         self.engine = GoogleTranslator(source="en", target="fr")
         self.cache_path = cache_path
+        self.cache_path.parent.mkdir(parents=True, exist_ok=True)
         self.cache = {}
         self.counter = 0
+        self.request_interval = max(0.25, float(request_interval))
+        self.last_request_at = 0.0
 
         if cache_path.exists():
             try:
@@ -83,6 +87,13 @@ class Translator:
         tmp = self.cache_path.with_suffix(".tmp")
         tmp.write_text(json.dumps(self.cache, ensure_ascii=False, indent=2), "utf-8")
         tmp.replace(self.cache_path)
+
+    def _throttle(self) -> None:
+        elapsed = time.monotonic() - self.last_request_at
+        remaining = self.request_interval - elapsed
+        if remaining > 0:
+            time.sleep(remaining)
+        self.last_request_at = time.monotonic()
 
     def translate_plain(self, text: str) -> str:
         if not text or not re.search(r"[A-Za-z]", text):
@@ -106,22 +117,52 @@ class Translator:
             return result
 
         last_error = None
-        for attempt in range(1, 7):
+        max_attempts = 10
+
+        for attempt in range(1, max_attempts + 1):
             try:
+                self._throttle()
                 result = self.engine.translate(text) or text
                 self.cache[text] = result
                 self.counter += 1
+
+                # Persistance immédiate : aucune progression perdue après un arrêt.
+                self.save()
+
                 if self.counter % 25 == 0:
-                    self.save()
                     print(f"      {len(self.cache)} segments en cache...")
                 return result
+
             except Exception as exc:
                 last_error = exc
-                wait = min(3 * attempt, 18)
-                eprint(f"      Traduction impossible ({attempt}/6), reprise dans {wait}s : {exc}")
+                message = str(exc).lower()
+                is_rate_limit = (
+                    "too many requests" in message
+                    or "429" in message
+                    or "rate limit" in message
+                )
+
+                if is_rate_limit:
+                    waits = [30, 60, 120, 180, 300, 300, 300, 300, 300, 300]
+                    wait = waits[min(attempt - 1, len(waits) - 1)]
+                    eprint(
+                        f"      Google limite les requêtes ({attempt}/{max_attempts}). "
+                        f"Pause {wait}s ; cache sauvegardé."
+                    )
+                else:
+                    wait = min(5 * attempt, 60)
+                    eprint(
+                        f"      Traduction impossible ({attempt}/{max_attempts}), "
+                        f"reprise dans {wait}s : {exc}"
+                    )
+
+                self.save()
                 time.sleep(wait)
 
-        raise RuntimeError(f"Échec de traduction : {last_error}")
+        self.save()
+        raise RuntimeError(
+            f"Échec de traduction après {max_attempts} tentatives : {last_error}"
+        )
 
     def translate_value(self, value: str) -> str:
         if not value or not re.search(r"[A-Za-z]", value):
@@ -343,13 +384,15 @@ def main():
     ap.add_argument("--source-zip", type=Path)
     ap.add_argument("--out", type=Path, default=DEFAULT_OUT)
     ap.add_argument("--chunk-kb", type=int, default=DEFAULT_CHUNK_KB)
+    ap.add_argument("--cache", type=Path, default=None)
+    ap.add_argument("--request-interval", type=float, default=DEFAULT_REQUEST_INTERVAL)
     args = ap.parse_args()
 
     out = args.out.resolve()
     work = out / "_work"
     extracted = work / "source"
     site = out / "site"
-    cache = out / "translation_cache.json"
+    cache = args.cache.resolve() if args.cache else (out / "translation_cache.json")
 
     out.mkdir(parents=True, exist_ok=True)
     work.mkdir(parents=True, exist_ok=True)
@@ -380,7 +423,9 @@ def main():
         raise SystemExit("Aucun fichier en_*.properties trouvé dans le ZIP.")
 
     print(f"      {len(sources)} fichier(s) source.")
-    translator = Translator(cache)
+    print(f"      Cache persistant : {cache}")
+    print(f"      Intervalle Google : {args.request_interval:.2f}s/requête")
+    translator = Translator(cache, request_interval=args.request_interval)
     all_files = []
 
     print("[3/5] Traduction EN → FR...")
