@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<input-method xmlns:android="http://schemas.android.com/apk/res/android"
+    android:settingsActivity="fr.tb.rebuild3workshop.MainActivity">
+    <subtype
+        android:label="@string/ime_subtype"
+        android:imeSubtypeLocale="fr_FR"
+        android:imeSubtypeMode="keyboard" />
+</input-method>

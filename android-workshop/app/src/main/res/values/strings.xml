@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Rebuild 3 Workshop</string>
+    <string name="ime_name">Rebuild 3 Workshop Keyboard</string>
+    <string name="ime_subtype">Français - Rebuild Workshop</string>
+</resources>
