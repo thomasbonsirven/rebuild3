@@ -95,6 +95,7 @@ jobs:
         run: |
           New-Item -ItemType Directory -Force 'rebuild3_fr_output\site\mods' | Out-Null
           Copy-Item 'mods\config\apocalypse-vivante.txt' 'rebuild3_fr_output\site\mods\apocalypse-vivante.txt' -Force
+          Copy-Item 'mods\config\coup-de-pouce.txt' 'rebuild3_fr_output\site\mods\coup-de-pouce.txt' -Force
           Copy-Item 'web\mods\index.html' 'rebuild3_fr_output\site\mods\index.html' -Force
 
       - name: Build downloadable ZIP
