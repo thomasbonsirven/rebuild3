@@ -1,2 +1,2 @@
-trigger: rebuild split4-v1.1
-reason: publish 4-part French pack and corrected gameplay mods
+trigger: rebuild android-safe chunks
+reason: replace 452KB parts with UI-first ~100KB + <=160KB chunks
