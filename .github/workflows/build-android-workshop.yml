@@ -31,60 +31,27 @@ jobs:
           distribution: temurin
           java-version: "17"
 
-      - name: Prepare Android SDK
-        timeout-minutes: 15
+      - name: Check Android SDK
         shell: powershell
         run: |
           $ErrorActionPreference = "Stop"
 
-          $SdkRoot = "D:\000-Rebuild3\android-sdk"
-          $SdkManager = Join-Path $SdkRoot "cmdline-tools\latest\bin\sdkmanager.bat"
-
-          if (-not (Test-Path $SdkManager)) {
-            Write-Host "Installing Android command-line tools..."
-            $Zip = Join-Path $env:RUNNER_TEMP "android-commandline-tools.zip"
-            $Extract = Join-Path $env:RUNNER_TEMP "android-commandline-tools"
-
-            Remove-Item $Zip -Force -ErrorAction SilentlyContinue
-            Remove-Item $Extract -Recurse -Force -ErrorAction SilentlyContinue
-            New-Item -ItemType Directory -Force -Path $Extract | Out-Null
-
-            Invoke-WebRequest -Uri "https://dl.google.com/android/repository/commandlinetools-win-12266719_latest.zip" -OutFile $Zip
-            Expand-Archive -LiteralPath $Zip -DestinationPath $Extract -Force
-
-            New-Item -ItemType Directory -Force -Path (Join-Path $SdkRoot "cmdline-tools") | Out-Null
-            $Latest = Join-Path $SdkRoot "cmdline-tools\latest"
-            Remove-Item $Latest -Recurse -Force -ErrorAction SilentlyContinue
-            Move-Item (Join-Path $Extract "cmdline-tools") $Latest
-          }
-
-          $Licenses = Join-Path $SdkRoot "licenses"
-          New-Item -ItemType Directory -Force -Path $Licenses | Out-Null
-          @(
-            "8933bad161af4178b1185d1a37fbf41ea5269c55",
-            "d56f5187479451eabf01fb78af6dfcb131a6481e"
-          ) | Set-Content -Path (Join-Path $Licenses "android-sdk-license") -Encoding ascii
-          "84831b9409646a918e30573bab4c9c91346d8abd" |
-            Set-Content -Path (Join-Path $Licenses "android-sdk-preview-license") -Encoding ascii
+          $SdkRoot = "D:\\000-Rebuild3\\android-sdk"
+          $PlatformDir = Join-Path $SdkRoot "platforms\\android-35"
+          $BuildToolsDir = Join-Path $SdkRoot "build-tools\\35.0.0"
 
           "ANDROID_HOME=$SdkRoot" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
           "ANDROID_SDK_ROOT=$SdkRoot" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
 
-          $PlatformDir = Join-Path $SdkRoot "platforms\\android-35"
-          $BuildToolsDir = Join-Path $SdkRoot "build-tools\\35.0.0"
+          Write-Host "SDK root: $SdkRoot"
+          Write-Host "Platform 35: $(Test-Path $PlatformDir)"
+          Write-Host "Build tools 35.0.0: $(Test-Path $BuildToolsDir)"
 
-          if ((Test-Path $PlatformDir) -and (Test-Path $BuildToolsDir)) {
-            Write-Host "Android SDK 35 already installed."
-          } else {
-            $YesFile = Join-Path $env:RUNNER_TEMP "sdk-yes.txt"
-            (1..100 | ForEach-Object { "y" }) | Set-Content -Path $YesFile -Encoding ascii
-
-            $Command = "type `"$YesFile`" | `"$SdkManager`" --sdk_root=`"$SdkRoot`" `"platform-tools`" `"platforms;android-35`" `"build-tools;35.0.0`""
-            cmd.exe /d /c $Command
-
-            if ($LASTEXITCODE -ne 0) {
-              throw "sdkmanager failed with exit code $LASTEXITCODE"
-            }
+          if (-not (Test-Path $PlatformDir)) {
+            throw "Missing Android platform: $PlatformDir"
+          }
+          if (-not (Test-Path $BuildToolsDir)) {
+            throw "Missing Android build-tools: $BuildToolsDir"
           }
 
       - name: Prepare Gradle 8.9
