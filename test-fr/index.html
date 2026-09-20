@@ -3,25 +3,43 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Rebuild 3 FR — Test Android</title>
+<title>Rebuild 3 FR — Android</title>
 <style>
-body{font-family:system-ui;background:#111;color:#eee;max-width:760px;margin:30px auto;padding:0 16px}
-.card{display:flex;justify-content:space-between;align-items:center;background:#1d1d1d;padding:14px;margin:10px 0;border-radius:12px}
-button{padding:10px 14px;border:0;border-radius:9px;font-weight:700}
+body{font-family:system-ui;background:#111;color:#eee;max-width:820px;margin:30px auto;padding:0 16px}
+.card{display:flex;justify-content:space-between;align-items:center;gap:18px;background:#1d1d1d;padding:16px;margin:12px 0;border-radius:12px}
+.card p{margin:.35rem 0 0;color:#aaa;font-size:.92rem}
+button{padding:11px 16px;border:0;border-radius:9px;font-weight:700;white-space:nowrap}
 code{background:#222;padding:2px 5px;border-radius:5px}
+hr{border:0;border-top:1px solid #333;margin:28px 0}
 </style>
 </head>
 <body>
-<h1>Rebuild 3 — Test français Android</h1>
-<p>Ces deux petits fichiers permettent de vérifier le copier/coller avant de générer le pack complet.</p>
-<p>Dans le jeu : <code>Config → Modding → Install Mod → Coller → Okay</code>.</p>
-<div class="card"><span>1. Ressources</span><button data-f="fr_resources_test.properties">Copier</button></div>
-<div class="card"><span>2. Règles grammaticales</span><button data-f="fr_rules_test.properties">Copier</button></div>
+<h1>Rebuild 3 — Android</h1>
+<p>Appuie sur <b>Copier</b>, puis dans le jeu : <code>Config → Modding → Install Mod → Coller → Okay</code>.</p>
+
+<h2>Traduction FR — test</h2>
+<div class="card"><div><b>1. Ressources</b><p>Petit pack FR pour vérifier le système de langue.</p></div><button data-f="fr_resources_test.properties">Copier</button></div>
+<div class="card"><div><b>2. Règles grammaticales</b><p>Pronoms et règles utilisées par les textes dynamiques.</p></div><button data-f="fr_rules_test.properties">Copier</button></div>
+
+<hr>
+<h2>Mod gameplay</h2>
+<div class="card">
+  <div>
+    <b>Apocalypse Vivante</b>
+    <p>Overhaul : monde plus actif, factions dynamiques, hordes périodiques, économie tendue et défenses renforcées. Difficulté NORMAL recommandée.</p>
+  </div>
+  <button data-f="apocalypse-vivante.txt">Copier</button>
+</div>
+
 <script>
 document.querySelectorAll('button').forEach(b=>b.onclick=async()=>{
-  const t=await (await fetch(b.dataset.f)).text();
-  await navigator.clipboard.writeText(t);
-  b.textContent='Copié ✓';
+  try{
+    const t=await (await fetch(b.dataset.f,{cache:'no-store'})).text();
+    await navigator.clipboard.writeText(t);
+    b.textContent='Copié ✓';
+  }catch(e){
+    b.textContent='Erreur';
+  }
 });
 </script>
 </body>

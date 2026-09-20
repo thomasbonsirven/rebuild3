@@ -1,0 +1,99 @@
+mod_type = config
+mod_name = Apocalypse Vivante
+mod_description = Overhaul de survie dynamique. Plus d'evenements, factions plus actives, hordes periodiques, ressources tendues mais justes et defenses plus importantes. Difficulte NORMAL recommandee.
+
+; =============================================================
+; APOCALYPSE VIVANTE
+; EASY        = Histoire / exploration
+; NORMAL      = Experience recommandee
+; CHALLENGING = Survie exigeante
+; HARD        = Guerre totale
+; IMPOSSIBLE  = Extinction
+; =============================================================
+
+; Plus de survivants dans le monde, sans saturer la carte
+COLINS_PER_SQUARE = 0.42, 0.36, 0.31, 0.25, 0.20
+SURVIVOR_ARRIVES_MULTIPLIER = 1.40, 1.20, 1.00, 0.80, 0.60
+COLIN_BONUS_LEVELS = 2, 1, 0, 0, 0
+
+; Depart confortable en Story, mais de plus en plus tendu
+STARTING_FOOD = 75, 55, 45, 32, 22
+STARTING_HAPPY = 100, 82, 65, 48, 32
+STARTING_MATERIALS = 30, 24, 20, 16, 12
+STARTING_AMMO = 18, 14, 10, 8, 6
+STARTING_FUEL = 10, 7, 5, 4, 3
+STARTING_MEDICINE = 10, 7, 5, 4, 3
+
+; =============================================================
+; MENACE ZOMBIE : des vagues lisibles plutot qu'un bruit constant
+; =============================================================
+
+EXTRA_ADJACENT_STARTING_ZOMBIES = 0, 1, 2, 5, 8
+MAX_ZOMBIES_PER_SQUARE = 70, 90, 120, 160, 200
+ZOMBIE_SPAWN_MULTIPLIER = 0.80, 1.10, 1.55, 2.25, 3.40
+STARTING_ZOMBIES_MULTIPLIER = 0.80, 1.00, 1.15, 1.35, 1.60
+
+; Unites regulieres + grosses hordes mobiles
+DAYS_BETWEEN_ZOMBIE_UNITS = 18, 12, 9, 7, 5
+DAYS_BETWEEN_MOB_SPAWN = 38, 26, 18, 13, 9
+MOB_STRENGTH_MULTIPLIER = 0.45, 0.82, 1.20, 1.70, 2.35
+MIN_ZOMBIE_UNITS_MULTIPLIER = 0.75, 0.95, 1.10, 1.30, 1.55
+MAX_ZOMBIE_UNITS_MULTIPLIER = 0.85, 1.05, 1.25, 1.55, 2.00
+
+; =============================================================
+; MONDE VIVANT : evenements et factions deviennent centraux
+; =============================================================
+
+EVENT_FREQUENCY_MULTIPLIER = 1.20, 1.35, 1.50, 1.60, 1.75
+BAD_EVENTS_FREQUENCY = 0.40, 0.72, 0.95, 1.20, 1.45
+FACTION_STARTING_STRENGTH_MULTIPLIER = 0.45, 0.65, 0.85, 1.05, 1.25
+FACTION_STRENGTH_MULTIPLIER = 0.20, 0.60, 1.10, 1.65, 2.35
+MIN_DAYS_BETWEEN_MEET_TRADE = 2, 2, 3, 3, 4
+PERCENT_STEALABLE_RESOURCE = 0.15, 0.30, 0.45, 0.60, 0.75
+MAX_STEALABLE_RESOURCE = 15, 30, 40, 50, 65
+
+; =============================================================
+; ECONOMIE : l'agriculture compte, sans transformer le jeu en grind
+; =============================================================
+
+BASE_FOOD_PER_FARM = 3.00, 2.25, 1.75, 1.35, 1.00
+BASE_FOOD_STORAGE = 75, 65, 55, 50, 45
+FERTILIZER_FOOD_BONUS = 0.75, 0.65, 0.55, 0.50, 0.45
+BASE_HOUSES = 3, 3, 2, 2, 2
+HOUSES_PER_SQUARE = 3, 3, 2, 2, 2
+USES_PER_AMMO = 5, 4, 3, 3, 2
+
+; =============================================================
+; SURVIVANTS : progression gratifiante, blessures significatives
+; =============================================================
+
+EXPERIENCE_MULTIPLIER = 1.75, 1.25, 1.00, 0.85, 0.70
+INJURY_CHANCE_BASE = 0.75, 0.55, 0.40, 0.28, 0.15
+DAYS_BETWEEN_DEATHS = 12, 8, 5, 3, 1
+SELF_HAPPINESS_LOSS_FROM_INJURY = 12, 16, 20, 24, 28
+FRIEND_HAPPINESS_LOSS_FROM_DEATH = 14, 18, 22, 26, 30
+TOTAL_HAPPINESS_LOSS_FROM_BUILDING_LOSS = 3, 5, 7, 9, 12
+LATEGAME_UPSET_MULTIPLIER = 0.30, 0.65, 1.00, 1.35, 1.75
+
+; =============================================================
+; DEFENSE : fortifier sa ville devient un vrai choix strategique
+; =============================================================
+
+DEFENSIVE_BUILDING_BONUS = 12, 12, 12, 12, 12
+UPGRADE_TOWER_BONUS = 7, 7, 7, 7, 7
+UPGRADE_BUNKER_BONUS = 13, 13, 13, 13, 13
+UPGRADE_TURRET_BONUS = 20, 20, 20, 20, 20
+MAX_AVERAGE_FORT_DEFENSE = 55, 55, 55, 55, 55
+TRAP_ZED_PER_DAY = 7, 6, 5, 5, 4
+TRAP2_ZED_PER_DAY = 14, 12, 10, 9, 8
+ATTRACTOR_ZED_PER_DAY = 7, 6, 5, 5, 4
+
+; =============================================================
+; RECRUTEMENT : un peu plus de variete dans les profils rencontres
+; =============================================================
+
+COLIN_LEADER_FREQUENCY = 2, 2, 2, 2, 2
+COLIN_SOLDIER_FREQUENCY = 4, 4, 4, 4, 4
+COLIN_SCAVENGER_FREQUENCY = 3, 3, 3, 3, 3
+COLIN_BUILDER_FREQUENCY = 3, 3, 3, 3, 3
+COLIN_ENGINEER_FREQUENCY = 2, 2, 2, 2, 2

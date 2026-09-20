@@ -44,6 +44,12 @@ jobs:
       - name: Validate generated keys
         run: python validate_pack.py
 
+      - name: Add gameplay mods to published site
+        run: |
+          mkdir -p rebuild3_fr_output/site/mods
+          cp mods/config/apocalypse-vivante.txt rebuild3_fr_output/site/mods/apocalypse-vivante.txt
+          cp web/mods/index.html rebuild3_fr_output/site/mods/index.html
+
       - name: Build downloadable ZIP
         run: |
           cd rebuild3_fr_output

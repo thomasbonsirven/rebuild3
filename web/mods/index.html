@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Rebuild 3 — Mods</title>
+<style>
+body{font-family:system-ui;background:#111;color:#eee;max-width:820px;margin:30px auto;padding:0 16px}
+.card{background:#1d1d1d;border:1px solid #333;border-radius:14px;padding:18px}
+button{padding:12px 18px;border:0;border-radius:9px;font-weight:700}
+small,p{color:#aaa;line-height:1.5}
+code{background:#222;padding:2px 5px;border-radius:5px}
+</style>
+</head>
+<body>
+<h1>Rebuild 3 — Mods gameplay</h1>
+<div class="card">
+<h2>Apocalypse Vivante</h2>
+<p>Un overhaul de survie dynamique : davantage d'événements, factions plus actives, hordes périodiques, économie mieux équilibrée et fortifications plus utiles.</p>
+<p><b>Réglage conseillé : NORMAL.</b></p>
+<button id="copy">Copier le mod</button>
+</div>
+<p><small>Installation Android : <code>Config → Modding → Install Mod → Coller → Okay</code></small></p>
+<script>
+document.getElementById('copy').onclick=async function(){
+  const r=await fetch('apocalypse-vivante.txt',{cache:'no-store'});
+  await navigator.clipboard.writeText(await r.text());
+  this.textContent='Copié ✓';
+}
+</script>
+</body>
+</html>
