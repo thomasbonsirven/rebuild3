@@ -762,58 +762,101 @@ def write_chunks(category: str, lines: list[str], out_dir: Path, max_bytes: int)
 
     return written
 
-def write_split_pack(
+def write_android_safe_pack(
     sections: list[tuple[str, list[str]]],
     site_dir: Path,
-    total_parts: int = 4,
+    max_kb: int = 160,
 ) -> list[Path]:
-    """Découpe la traduction complète en N mods équilibrés sans couper une propriété."""
-    records: list[list[str]] = []
+    """
+    Génère des morceaux sûrs pour Android.
 
-    for category, lines in sections:
+    La première partie contient volontairement l'interface/menu et les règles
+    essentielles afin que les menus soient traduits même avant les gros textes.
+    Les parties suivantes restent sous une cible d'environ max_kb.
+    """
+    max_bytes = max(64, max_kb) * 1024
+    core_order = ["snippets", "rules", "resources", "scenes", "tutorial"]
+    section_map = {name: lines for name, lines in sections}
+
+    def section_records(name: str, lines: list[str]) -> list[list[str]]:
         header = [
             "; ============================================================",
-            f"; {category}",
+            f"; {name}",
             "; ============================================================",
             "",
         ]
         grouped = group_records(lines)
         if grouped:
             grouped[0] = header + grouped[0]
-            records.extend(grouped)
-        else:
-            records.append(header)
+            return grouped
+        return [header]
 
-    if not records:
-        raise RuntimeError("Aucune traduction à découper.")
+    # Partie 1 : menu/interface/règles, volontairement petite.
+    core_lines: list[str] = []
+    used = set()
+    for name in core_order:
+        if name not in section_map:
+            continue
+        used.add(name)
+        for record in section_records(name, section_map[name]):
+            core_lines.extend(record)
 
-    sizes = [len(("\n".join(record) + "\n").encode("utf-8")) for record in records]
-    total_bytes = sum(sizes)
-    boundaries = [total_bytes * n / total_parts for n in range(1, total_parts)]
+    chunks: list[list[str]] = [core_lines]
 
-    chunks: list[list[str]] = [[] for _ in range(total_parts)]
-    current_part = 0
-    cumulative = 0
+    # Reste du contenu : découpage strict par taille de records.
+    current: list[str] = []
+    current_size = 0
 
-    for record, size in zip(records, sizes):
-        if (
-            current_part < total_parts - 1
-            and chunks[current_part]
-            and cumulative + size > boundaries[current_part]
-        ):
-            current_part += 1
+    for name, lines in sections:
+        if name in used:
+            continue
 
-        chunks[current_part].extend(record)
-        cumulative += size
+        for record in section_records(name, lines):
+            raw = "\n".join(record) + "\n"
+            record_size = len(raw.encode("utf-8"))
 
+            if record_size > max_bytes:
+                # Cas théorique d'une propriété gigantesque : elle reste seule.
+                if current:
+                    chunks.append(current)
+                    current = []
+                    current_size = 0
+                chunks.append(record)
+                continue
+
+            if current and current_size + record_size > max_bytes:
+                chunks.append(current)
+                current = []
+                current_size = 0
+
+            current.extend(record)
+            current_size += record_size
+
+    if current:
+        chunks.append(current)
+
+    total_parts = len(chunks)
     written: list[Path] = []
+
     for part, chunk in enumerate(chunks, 1):
-        filename = f"fr_rebuild3_{part}_sur_{total_parts}.properties"
+        filename = f"fr_rebuild3_{part:02d}_sur_{total_parts:02d}.properties"
         path = site_dir / filename
+
+        if part == 1:
+            description = (
+                "Interface, menus, règles et textes essentiels en français. "
+                f"Partie 1 sur {total_parts}; installer toutes les parties."
+            )
+        else:
+            description = (
+                f"Traduction française de Rebuild 3 - partie {part} sur "
+                f"{total_parts}. Installer toutes les parties dans l'ordre."
+            )
+
         body = (
             "mod_type = language\n"
             f"mod_name = Rebuild 3 - Français {part}/{total_parts}\n"
-            f"mod_description = Traduction française de Rebuild 3 - partie {part} sur {total_parts}. Installer les {total_parts} parties.\n"
+            f"mod_description = {description}\n"
             "mod_language_name = Français\n"
             "mod_locale_id = FR\n\n"
             + "\n".join(chunk).rstrip()
@@ -823,7 +866,6 @@ def write_split_pack(
         written.append(path)
 
     return written
-
 
 def build_index(files: list[Path], site_dir: Path):
     cards = []
@@ -888,11 +930,11 @@ h2{margin-top:32px}
 
 <section class="notice">
 <b>Installation Android :</b>
-installe les 4 parties <b>dans l'ordre 1 → 4</b> via
+installe toutes les parties <b>dans l'ordre indiqué</b> via
 <code>Config → Modding → Install Mod</code>, puis redémarre le jeu.
 </section>
 
-<h2>Traduction française <span class="badge">4 parties</span></h2>
+<h2>Traduction française <span class="badge">petits fichiers Android</span></h2>
 <section class="grid">__FR_CARDS__</section>
 
 <p><a class="link secondary" href="./fr/">Lien permanent vers la dernière traduction</a></p>
@@ -1000,7 +1042,7 @@ code{background:#222;padding:.12rem .35rem;border-radius:5px}
 <main>
 <h1>Rebuild 3 — Français</h1>
 <p>Cette URL reste permanente et propose toujours la dernière version publiée.</p>
-<p>Installe les <b>4 parties dans l'ordre 1 → 4</b>, puis redémarre Rebuild 3.</p>
+<p>Installe <b>toutes les parties dans l'ordre</b>, puis redémarre Rebuild 3.</p>
 <section>__FR_CARDS__</section>
 <p><a href="../">Retour à l'accueil</a></p>
 <div id="status"></div>
@@ -1101,8 +1143,8 @@ def main():
         sections.append((category, translated))
         translator.save()
 
-    print("[4/5] Génération des 4 parties FR et du site...")
-    fr_files = write_split_pack(sections, site, total_parts=4)
+    print("[4/5] Génération du pack Android en petits morceaux sûrs...")
+    fr_files = write_android_safe_pack(sections, site, max_kb=160)
     build_index(fr_files, site)
 
     manifest = {
