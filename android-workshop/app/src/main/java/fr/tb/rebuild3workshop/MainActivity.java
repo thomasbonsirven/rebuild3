@@ -49,7 +49,7 @@ public class MainActivity extends Activity {
         root.addView(text("Rebuild 3 Workshop", 26, true));
 
         TextView intro = text(
-            "V0.2 — Clavier spécialisé\n\n" +
+            "V0.4 — Clavier spécialisé\n\n" +
             "Le clavier écrit directement dans Install Mod par petits blocs. " +
             "Pas d'overlay, pas d'Accessibility et pas de gros collage presse-papiers.",
             16, false);
@@ -66,9 +66,9 @@ public class MainActivity extends Activity {
         }));
 
         root.addView(section("2. Télécharger"));
-        root.addView(button("Pack Android multi-fichiers — recommandé", v ->
+        root.addView(button("Pack Android multi-fichiers — sécurité", v ->
             downloadFromManifest(DownloadMode.ANDROID_MULTI)));
-        root.addView(button("Pack complet — 1 fichier (test clavier)", v ->
+        root.addView(button("Pack complet — 1 fichier (clavier)", v ->
             downloadFromManifest(DownloadMode.DESKTOP_FULL)));
         root.addView(button("TEST UI très court", v ->
             downloadFromManifest(DownloadMode.UI_TEST)));
