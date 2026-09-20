@@ -762,31 +762,97 @@ def write_chunks(category: str, lines: list[str], out_dir: Path, max_bytes: int)
 
     return written
 
-def write_full_pack(sections: list[tuple[str, list[str]]], site_dir: Path) -> Path:
-    """Écrit toute la traduction dans un seul mod language installable."""
-    path = site_dir / "fr_rebuild3_complet.properties"
-    body = [
-        "mod_type = language",
-        "mod_name = Rebuild 3 - Français complet",
-        "mod_description = Traduction française complète de Rebuild 3 pour Android",
-        "mod_language_name = Français",
-        "mod_locale_id = FR",
-        "",
-    ]
+def write_split_pack(
+    sections: list[tuple[str, list[str]]],
+    site_dir: Path,
+    total_parts: int = 4,
+) -> list[Path]:
+    """Découpe la traduction complète en N mods équilibrés sans couper une propriété."""
+    records: list[list[str]] = []
 
     for category, lines in sections:
-        body.append(f"; ============================================================")
-        body.append(f"; {category}")
-        body.append(f"; ============================================================")
-        body.extend(lines)
-        body.append("")
+        header = [
+            "; ============================================================",
+            f"; {category}",
+            "; ============================================================",
+            "",
+        ]
+        grouped = group_records(lines)
+        if grouped:
+            grouped[0] = header + grouped[0]
+            records.extend(grouped)
+        else:
+            records.append(header)
 
-    path.write_text("\n".join(body).rstrip() + "\n", "utf-8")
-    return path
+    if not records:
+        raise RuntimeError("Aucune traduction à découper.")
+
+    sizes = [len(("\n".join(record) + "\n").encode("utf-8")) for record in records]
+    total_bytes = sum(sizes)
+    boundaries = [total_bytes * n / total_parts for n in range(1, total_parts)]
+
+    chunks: list[list[str]] = [[] for _ in range(total_parts)]
+    current_part = 0
+    cumulative = 0
+
+    for record, size in zip(records, sizes):
+        if (
+            current_part < total_parts - 1
+            and chunks[current_part]
+            and cumulative + size > boundaries[current_part]
+        ):
+            current_part += 1
+
+        chunks[current_part].extend(record)
+        cumulative += size
+
+    written: list[Path] = []
+    for part, chunk in enumerate(chunks, 1):
+        filename = f"fr_rebuild3_{part}_sur_{total_parts}.properties"
+        path = site_dir / filename
+        body = (
+            "mod_type = language\n"
+            f"mod_name = Rebuild 3 - Français {part}/{total_parts}\n"
+            f"mod_description = Traduction française de Rebuild 3 - partie {part} sur {total_parts}. Installer les {total_parts} parties.\n"
+            "mod_language_name = Français\n"
+            "mod_locale_id = FR\n\n"
+            + "\n".join(chunk).rstrip()
+            + "\n"
+        )
+        path.write_text(body, "utf-8")
+        written.append(path)
+
+    return written
 
 
-def build_index(full_file: Path, site_dir: Path):
-    size = full_file.stat().st_size / 1024
+def build_index(files: list[Path], site_dir: Path):
+    cards = []
+    fr_cards = []
+
+    for i, path in enumerate(files, 1):
+        size = path.stat().st_size / 1024
+        card = (
+            '<article class="card">'
+            '<div>'
+            f'<strong>Français — Partie {i}/{len(files)}</strong>'
+            f'<small>{size:.1f} KiB — installer cette partie dans Rebuild 3.</small>'
+            '</div>'
+            '<div class="actions">'
+            f'<button data-file="{html.escape(path.name)}">Copier {i}/{len(files)}</button>'
+            '</div>'
+            '</article>'
+        )
+        cards.append(card)
+
+        fr_cards.append(
+            '<article class="card">'
+            '<div>'
+            f'<strong>Partie {i}/{len(files)}</strong>'
+            f'<small>{size:.1f} KiB</small>'
+            '</div>'
+            f'<button data-file="../{html.escape(path.name)}">Copier {i}/{len(files)}</button>'
+            '</article>'
+        )
 
     page = """<!doctype html>
 <html lang="fr">
@@ -822,22 +888,14 @@ h2{margin-top:32px}
 
 <section class="notice">
 <b>Installation Android :</b>
-Copier → Rebuild 3 → <code>Config → Modding → Install Mod</code> → Coller → Okay.
+installe les 4 parties <b>dans l'ordre 1 → 4</b> via
+<code>Config → Modding → Install Mod</code>, puis redémarre le jeu.
 </section>
 
-<h2>Traduction française</h2>
-<section class="grid">
-<article class="card">
-  <div>
-    <strong>Français complet <span class="badge">1 seul fichier</span></strong>
-    <small>__SIZE__ KiB — toutes les traductions réunies dans un seul mod.</small>
-  </div>
-  <div class="actions">
-    <button data-file="fr_rebuild3_complet.properties">Copier la traduction</button>
-    <a class="link secondary" href="./fr/">Lien permanent</a>
-  </div>
-</article>
-</section>
+<h2>Traduction française <span class="badge">4 parties</span></h2>
+<section class="grid">__FR_CARDS__</section>
+
+<p><a class="link secondary" href="./fr/">Lien permanent vers la dernière traduction</a></p>
 
 <h2>Mods gameplay</h2>
 <section class="grid">
@@ -912,7 +970,7 @@ document.querySelectorAll('button[data-file]').forEach(btn=>{
 </script>
 </body>
 </html>
-""".replace("__SIZE__", f"{size:.1f}")
+""".replace("__FR_CARDS__", "".join(cards))
 
     (site_dir / "index.html").write_text(page, "utf-8")
 
@@ -927,45 +985,46 @@ document.querySelectorAll('button[data-file]').forEach(btn=>{
 <style>
 :root{color-scheme:dark;font-family:system-ui,-apple-system,"Segoe UI",sans-serif}
 body{margin:0;background:#111;color:#eee}
-main{width:min(720px,92vw);margin:48px auto}
-.card{background:#181818;border:1px solid #303030;border-radius:14px;padding:22px}
-p{color:#bbb;line-height:1.55}
+main{width:min(760px,92vw);margin:48px auto}
+.card{display:flex;justify-content:space-between;align-items:center;gap:14px;background:#181818;border:1px solid #303030;border-radius:14px;padding:16px;margin:12px 0}
+p,small{color:#bbb;line-height:1.55}
 button,a{display:inline-block;border:0;border-radius:10px;padding:12px 16px;font-weight:700;text-decoration:none;cursor:pointer}
 button{background:#eee;color:#111}
-a{background:#2a2a2a;color:#eee;border:1px solid #444;margin-left:8px}
+a{background:#2a2a2a;color:#eee;border:1px solid #444}
 code{background:#222;padding:.12rem .35rem;border-radius:5px}
 #status{margin-top:14px;color:#bbb}
+@media(max-width:620px){.card{align-items:flex-start;flex-direction:column}}
 </style>
 </head>
 <body>
 <main>
-<div class="card">
 <h1>Rebuild 3 — Français</h1>
-<p>Ce lien reste permanent. Le bouton récupère toujours la dernière traduction publiée.</p>
-<p>Installation : <code>Config → Modding → Install Mod</code> puis colle le contenu.</p>
-<button id="copy">Copier la dernière version</button>
-<a href="../">Accueil</a>
+<p>Cette URL reste permanente et propose toujours la dernière version publiée.</p>
+<p>Installe les <b>4 parties dans l'ordre 1 → 4</b>, puis redémarre Rebuild 3.</p>
+<section>__FR_CARDS__</section>
+<p><a href="../">Retour à l'accueil</a></p>
 <div id="status"></div>
-</div>
 </main>
 <script>
-document.getElementById('copy').onclick=async function(){
-  const status=document.getElementById('status');
-  try{
-    const r=await fetch('../fr_rebuild3_complet.properties',{cache:'no-store'});
-    if(!r.ok)throw new Error('HTTP '+r.status);
-    const text=await r.text();
-    await navigator.clipboard.writeText(text);
-    this.textContent='Copié ✓';
-    status.textContent='Dernière traduction copiée dans le presse-papiers.';
-  }catch(e){
-    status.textContent='Erreur : '+e.message;
-  }
-};
+const status=document.getElementById('status');
+document.querySelectorAll('button[data-file]').forEach(btn=>{
+  btn.onclick=async function(){
+    try{
+      const r=await fetch(this.dataset.file,{cache:'no-store'});
+      if(!r.ok)throw new Error('HTTP '+r.status);
+      await navigator.clipboard.writeText(await r.text());
+      this.textContent='Copié ✓';
+      status.textContent='Partie copiée dans le presse-papiers.';
+    }catch(e){
+      status.textContent='Erreur : '+e.message;
+    }
+  };
+});
 </script>
 </body>
 </html>
-"""
+""".replace("__FR_CARDS__", "".join(fr_cards))
+
     (fr_dir / "index.html").write_text(latest_page, "utf-8")
 
 def main():
@@ -1042,18 +1101,18 @@ def main():
         sections.append((category, translated))
         translator.save()
 
-    print("[4/5] Génération du fichier FR complet et du site...")
-    full_file = write_full_pack(sections, site)
-    build_index(full_file, site)
+    print("[4/5] Génération des 4 parties FR et du site...")
+    fr_files = write_split_pack(sections, site, total_parts=4)
+    build_index(fr_files, site)
 
     manifest = {
         "source": SOURCE_URL,
         "language": "fr",
         "locale_id": "FR",
-        "file": {
-            "name": full_file.name,
-            "bytes": full_file.stat().st_size,
-        },
+        "files": [
+            {"name": path.name, "bytes": path.stat().st_size}
+            for path in fr_files
+        ],
     }
     (site / "manifest.json").write_text(
         json.dumps(manifest, ensure_ascii=False, indent=2),
@@ -1062,8 +1121,8 @@ def main():
 
     print("[5/5] Terminé.")
     print(f"      Site : {site}")
-    print(f"      Fichier FR : {full_file}")
-    print(f"      Taille : {full_file.stat().st_size / 1024:.1f} KiB")
+    for path in fr_files:
+        print(f"      {path.name} : {path.stat().st_size / 1024:.1f} KiB")
 
 if __name__ == "__main__":
     main()
